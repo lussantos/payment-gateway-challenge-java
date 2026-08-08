@@ -23,3 +23,16 @@ docker-compose.yml - configures the bank simulator
 For documentation openAPI is included, and it can be found under the following url: **http://localhost:8090/swagger-ui/index.html**
 
 **Feel free to change the structure of the solution, use a different library etc.**
+
+## Interview Documentation
+
+### Report 
+
+File that will describe steps done to complete the project
+File directory: [interview_report.md](docs/interview_report.md)
+
+### Architecture
+
+Documentation that will describe the architecture and possible steps related to it.
+
+File directory: [interview_report.md](docs/architecture.md)
