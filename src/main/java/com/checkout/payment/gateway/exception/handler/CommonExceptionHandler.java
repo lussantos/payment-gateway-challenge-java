@@ -2,8 +2,8 @@ package com.checkout.payment.gateway.exception.handler;
 
 import com.checkout.payment.gateway.exception.EventProcessingException;
 import com.checkout.payment.gateway.exception.InvalidPaymentRequestException;
-import com.checkout.payment.gateway.model.ErrorResponse;
-import com.checkout.payment.gateway.model.PostPaymentErrorResponse;
+import com.checkout.payment.gateway.model.dto.ErrorResponse;
+import com.checkout.payment.gateway.model.dto.PostPaymentErrorResponse;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;

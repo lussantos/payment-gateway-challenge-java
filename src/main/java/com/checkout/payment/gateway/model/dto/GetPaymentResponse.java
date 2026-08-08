@@ -1,4 +1,4 @@
-package com.checkout.payment.gateway.model;
+package com.checkout.payment.gateway.model.dto;
 
 import com.checkout.payment.gateway.enums.PaymentStatus;
 import lombok.Getter;

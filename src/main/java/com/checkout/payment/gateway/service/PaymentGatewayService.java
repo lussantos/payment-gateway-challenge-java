@@ -2,8 +2,8 @@ package com.checkout.payment.gateway.service;
 
 import com.checkout.payment.gateway.enums.PaymentStatus;
 import com.checkout.payment.gateway.exception.EventProcessingException;
-import com.checkout.payment.gateway.model.PostPaymentRequest;
-import com.checkout.payment.gateway.model.PostPaymentResponse;
+import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
+import com.checkout.payment.gateway.model.dto.PostPaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
 import java.math.BigInteger;
 import java.util.Currency;
@@ -34,6 +34,7 @@ public class PaymentGatewayService {
 
 
   public PostPaymentResponse processPayment(PostPaymentRequest paymentRequest) {
+    LOG.debug("Requesting payment processing with object: {}", paymentRequest);
     currencyValidationService.validate(paymentRequest.getCurrency());
 
     return new PostPaymentResponse().setId(UUID.fromString("bede9e5d-d54f-4e99-b73b-a30941cc9048"))

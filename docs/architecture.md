@@ -6,11 +6,10 @@ will be updated as the final solution takes shape.
 ## Phase 1 — Basic Functionality
 
 - Implement the core functional requirements.
-- Add a PostgreSQL connection.
 - Run the application with Docker to simplify future improvements and evolution.
 
-## Phase 2 — Reliability and Events
-
+## Phase 2 — Database, Reliability and Events
+- Add a PostgreSQL connection.
 - Implement idempotency to prevent the same transaction from being processed twice.
 - Publish events so that payment data can be distributed to other applications.
 - Encrypt sensible data
