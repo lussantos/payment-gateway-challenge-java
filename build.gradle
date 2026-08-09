@@ -31,7 +31,7 @@ dependencies {
   implementation 'org.springframework.security:spring-security-crypto'
   runtimeOnly 'org.postgresql:postgresql'
   //TODO found security vulnerability, I would replace it
-  implementation 'implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0")'
+  implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
 
   compileOnly("org.projectlombok:lombok:1.18.46")
   annotationProcessor("org.projectlombok:lombok:1.18.46")

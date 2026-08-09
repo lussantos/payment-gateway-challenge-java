@@ -3,6 +3,7 @@ package com.checkout.payment.gateway.controller;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -53,6 +54,7 @@ class PaymentGatewayControllerTest {
 
     MvcResult result = mvc.perform(
             MockMvcRequestBuilders.post("/payments").contentType(MediaType.APPLICATION_JSON)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .content(request)).andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.status").value(PaymentStatus.REJECTED.getName())).andReturn();
 
@@ -65,7 +67,7 @@ class PaymentGatewayControllerTest {
         .map(PaymentValidationError::field)
         .toList());
 
-    verify(paymentGatewayService, never()).processPayment(any());
+    verify(paymentGatewayService, never()).processPayment(anyString(), any());
   }
 
   private static Stream<Arguments> invalidPaymentRequests() {
@@ -90,15 +92,16 @@ class PaymentGatewayControllerTest {
               "expiry_month": 13,
               "expiry_year": 999,
               "currency": "JPY",
-              "amount": 100,
+              "amount": -100,
               "cvv": "12"
             }
             """, List.of(
+            "Minimum amount value must be 1",
             "Card number must contain between 14 and 19 digits",
             "Expiry year must have at least 4 digits.",
             "Expiry month value must be from 1 to 12",
             "CVV must contain 3 or 4 digits"),
-            List.of("card_number", "cvv", "expiry_month", "expiry_year")));
+            List.of("amount", "card_number", "cvv", "expiry_month", "expiry_year")));
   }
 
 }

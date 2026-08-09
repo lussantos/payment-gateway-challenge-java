@@ -16,3 +16,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_payments_authorization_code
 
 CREATE INDEX IF NOT EXISTS ix_payments_status_created_at
     ON payments (status, created_at);
+
+CREATE TABLE IF NOT EXISTS idempotency_records (
+    idempotency_key VARCHAR(255) PRIMARY KEY,
+    request_hash VARCHAR(64) NOT NULL,
+    payment_id UUID UNIQUE REFERENCES payments(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+ALTER TABLE idempotency_records ALTER COLUMN payment_id DROP NOT NULL;

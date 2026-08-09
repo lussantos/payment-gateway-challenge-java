@@ -17,11 +17,13 @@ public class PaymentValidator {
 
   private final List<ValidationRule> validationRules;
 
-  public List<PaymentValidationError> validate(PaymentRequest request) {
+  public List<PaymentValidationError> validate(
+      String idempotencyKey, PaymentRequest request) {
     List<PaymentValidationError> errors = new ArrayList<>();
+    PaymentValidationContext context = new PaymentValidationContext(idempotencyKey, request);
 
     for (ValidationRule rule : validationRules) {
-      ValidationResult result = rule.validate(request);
+      ValidationResult result = rule.validate(context);
       if (!result.isValid()) {
         LOG.debug("Validation failed for rule '{}': {}",
             result.getRuleName(), result.getErrorMessage());

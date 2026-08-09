@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import com.checkout.payment.gateway.validator.ValidationResult;
+import com.checkout.payment.gateway.validator.PaymentValidationContext;
 import org.junit.jupiter.api.Test;
 
 class CardExpiryRuleTest {
@@ -18,7 +19,8 @@ class CardExpiryRuleTest {
         .setExpiryMonth(12)
         .setExpiryYear(2099);
 
-    ValidationResult result = cardExpiryRule.validate(paymentRequest);
+    ValidationResult result = cardExpiryRule.validate(
+        new PaymentValidationContext("payment-key", paymentRequest));
 
     assertTrue(result.isValid());
   }
@@ -29,7 +31,8 @@ class CardExpiryRuleTest {
         .setExpiryMonth(1)
         .setExpiryYear(2020);
 
-    ValidationResult result = cardExpiryRule.validate(paymentRequest);
+    ValidationResult result = cardExpiryRule.validate(
+        new PaymentValidationContext("payment-key", paymentRequest));
 
     assertFalse(result.isValid());
     assertEquals("expiry_date", result.getField());

@@ -41,6 +41,7 @@ public class PaymentRequest implements Serializable {
   private String currency;
 
   @NotNull(message = "Amount is required")
+  @Min(value = 1, message = "Minimum amount value must be 1")
   private BigInteger amount;
 
   @NotBlank(message = "CVV is required")

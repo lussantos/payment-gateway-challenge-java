@@ -15,9 +15,11 @@ import com.checkout.payment.gateway.exception.EventProcessingException;
 import com.checkout.payment.gateway.exception.PaymentValidationError;
 import com.checkout.payment.gateway.exception.PaymentValidationException;
 import com.checkout.payment.gateway.model.Payment;
+import com.checkout.payment.gateway.model.IdempotencyRecord;
 import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import com.checkout.payment.gateway.model.dto.PaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
+import com.checkout.payment.gateway.repository.IdempotencyRecordRepository;
 import com.checkout.payment.gateway.validator.PaymentValidator;
 import java.math.BigInteger;
 import java.time.Instant;
@@ -61,6 +63,15 @@ class PaymentGatewayServiceTest {
   @Mock
   private PaymentEncryptionService paymentEncryptionService;
 
+  @Mock
+  private IdempotencyRecordCreator idempotencyRecordCreator;
+
+  @Mock
+  private IdempotencyRecordRepository idempotencyRecordRepository;
+
+  @Mock
+  private PaymentRequestFingerprint paymentRequestFingerprint;
+
   @InjectMocks
   private PaymentGatewayService paymentGatewayService;
 
@@ -96,7 +107,10 @@ class PaymentGatewayServiceTest {
     BankPaymentResponse bankResponse = new BankPaymentResponse(
         authorized, AUTHORIZATION_CODE.toString());
 
-    when(paymentValidator.validate(paymentRequest)).thenReturn(List.of());
+    when(paymentValidator.validate("payment-key", paymentRequest)).thenReturn(List.of());
+    when(paymentRequestFingerprint.hash(paymentRequest)).thenReturn("request-hash");
+    when(idempotencyRecordRepository.lockById("payment-key"))
+        .thenReturn(IdempotencyRecord.pending("payment-key", "request-hash"));
     when(bankSimulatorService.processBankPayment(paymentRequest)).thenReturn(bankResponse);
     when(paymentEncryptionService.encrypt(CARD_NUMBER)).thenReturn(ENCRYPTED_CARD_NUMBER);
     when(paymentEncryptionService.encrypt(CVV)).thenReturn(ENCRYPTED_CVV);
@@ -108,7 +122,7 @@ class PaymentGatewayServiceTest {
       uuid.when(UUID::randomUUID).thenReturn(PAYMENT_ID);
       instant.when(Instant::now).thenReturn(PAYMENT_TIME);
 
-      PaymentResponse response = paymentGatewayService.processPayment(paymentRequest);
+      PaymentResponse response = paymentGatewayService.processPayment("payment-key", paymentRequest);
 
       assertEquals(expectedResponse, response);
     }
@@ -123,11 +137,11 @@ class PaymentGatewayServiceTest {
     List<PaymentValidationError> validationErrors = List.of(
         new PaymentValidationError("expiry_date", "Expiry date must be in the future"),
         new PaymentValidationError("currency", "Currency 'JPY' is not supported"));
-    when(paymentValidator.validate(invalidPayment)).thenReturn(validationErrors);
+    when(paymentValidator.validate("payment-key", invalidPayment)).thenReturn(validationErrors);
 
     PaymentValidationException exception = assertThrows(
         PaymentValidationException.class,
-        () -> paymentGatewayService.processPayment(invalidPayment));
+        () -> paymentGatewayService.processPayment("payment-key", invalidPayment));
 
     assertEquals(validationErrors, exception.getErrors());
     assertEquals(
@@ -142,12 +156,15 @@ class PaymentGatewayServiceTest {
     PaymentRequest paymentRequest = getPaymentRequest();
     BankIntegrationException expectedException =
         new BankIntegrationException("Unable to process payment with the acquiring bank");
-    when(paymentValidator.validate(paymentRequest)).thenReturn(List.of());
+    when(paymentValidator.validate("payment-key", paymentRequest)).thenReturn(List.of());
+    when(paymentRequestFingerprint.hash(paymentRequest)).thenReturn("request-hash");
+    when(idempotencyRecordRepository.lockById("payment-key"))
+        .thenReturn(IdempotencyRecord.pending("payment-key", "request-hash"));
     when(bankSimulatorService.processBankPayment(paymentRequest)).thenThrow(expectedException);
 
     BankIntegrationException exception = assertThrows(
         BankIntegrationException.class,
-        () -> paymentGatewayService.processPayment(paymentRequest));
+        () -> paymentGatewayService.processPayment("payment-key", paymentRequest));
 
     assertSame(expectedException, exception);
     verifyNoInteractions(paymentEncryptionService, paymentsRepository);

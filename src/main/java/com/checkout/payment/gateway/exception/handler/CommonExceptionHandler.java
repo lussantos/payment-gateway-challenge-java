@@ -1,6 +1,7 @@
 package com.checkout.payment.gateway.exception.handler;
 
 import com.checkout.payment.gateway.exception.EventProcessingException;
+import com.checkout.payment.gateway.exception.IdempotencyConflictException;
 import com.checkout.payment.gateway.exception.PaymentValidationError;
 import com.checkout.payment.gateway.exception.PaymentValidationException;
 import com.checkout.payment.gateway.model.dto.ErrorResponse;
@@ -52,6 +53,13 @@ public class CommonExceptionHandler {
   public ResponseEntity<PostPaymentErrorResponse> handlePaymentValidationException(
       PaymentValidationException ex) {
     return createRejectedResponse(ex.getErrors());
+  }
+
+  @ExceptionHandler(IdempotencyConflictException.class)
+  public ResponseEntity<ErrorResponse> handleIdempotencyConflict(
+      IdempotencyConflictException exception) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(new ErrorResponse(exception.getMessage()));
   }
 
   private static List<PaymentValidationError> extractValidationErrors(

@@ -19,7 +19,7 @@ class PaymentValidatorTest {
     PaymentValidator paymentValidator = new PaymentValidator(
         List.of(expiryRule, currencyRule));
 
-    List<PaymentValidationError> errors = paymentValidator.validate(paymentRequest);
+    List<PaymentValidationError> errors = paymentValidator.validate("payment-key", paymentRequest);
 
     assertEquals(List.of(
         new PaymentValidationError("expiry_date", "Expiry date must be in the future"),
@@ -32,7 +32,7 @@ class PaymentValidatorTest {
     ValidationRule successfulRule = request -> ValidationResult.success("SuccessfulRule");
     PaymentValidator paymentValidator = new PaymentValidator(List.of(successfulRule));
 
-    List<PaymentValidationError> errors = paymentValidator.validate(paymentRequest);
+    List<PaymentValidationError> errors = paymentValidator.validate("payment-key", paymentRequest);
 
     assertEquals(List.of(), errors);
   }

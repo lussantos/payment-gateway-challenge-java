@@ -4,7 +4,9 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -24,7 +26,13 @@ import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Currency;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -82,6 +90,7 @@ class PaymentGatewayControllerIntegrationTest {
     when(bankSimulatorClient.processPayment(payment)).thenReturn(bankResponse);
 
     MvcResult result = mvc.perform(MockMvcRequestBuilders.post("/payments")
+            .header("Idempotency-Key", UUID.randomUUID().toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(payment)))
         .andExpect(status().isCreated())
@@ -114,12 +123,102 @@ class PaymentGatewayControllerIntegrationTest {
   }
 
   @Test
+  void sameIdempotencyKeyAndRequestReplaysTheOriginalPayment() throws Exception {
+    PaymentRequest payment = getPaymentRequest(Currency.getInstance("USD"));
+    String key = UUID.randomUUID().toString();
+    when(bankSimulatorClient.processPayment(payment))
+        .thenReturn(new BankPaymentResponse(false, null));
+
+    PaymentResponse first = postPayment(key, payment, 201);
+    PaymentResponse replay = postPayment(key, payment, 201);
+
+    assertEquals(first, replay);
+    verify(bankSimulatorClient, times(1)).processPayment(payment);
+  }
+
+  @Test
+  void sameIdempotencyKeyWithDifferentRequestIsRejected() throws Exception {
+    PaymentRequest firstRequest = getPaymentRequest(Currency.getInstance("USD"));
+    PaymentRequest differentRequest = getPaymentRequest(Currency.getInstance("USD"))
+        .setAmount(BigInteger.valueOf(101));
+    String key = UUID.randomUUID().toString();
+    when(bankSimulatorClient.processPayment(firstRequest))
+        .thenReturn(new BankPaymentResponse(false, null));
+
+    postPayment(key, firstRequest, 201);
+
+    mvc.perform(MockMvcRequestBuilders.post("/payments")
+            .header("Idempotency-Key", key)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(differentRequest)))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.message").value(
+            "Idempotency-Key has already been used with a different request"));
+    verify(bankSimulatorClient, times(1)).processPayment(firstRequest);
+  }
+
+  @Test
+  void concurrentRequestsWithSameKeyExecuteBankCallOnce() throws Exception {
+    PaymentRequest payment = getPaymentRequest(Currency.getInstance("GBP"));
+    String key = UUID.randomUUID().toString();
+    CountDownLatch start = new CountDownLatch(1);
+    when(bankSimulatorClient.processPayment(payment)).thenAnswer(invocation -> {
+      Thread.sleep(150);
+      return new BankPaymentResponse(false, null);
+    });
+
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      List<Future<PaymentResponse>> futures = List.of(
+          executor.submit(() -> {
+            start.await();
+            return postPayment(key, payment, 201);
+          }),
+          executor.submit(() -> {
+            start.await();
+            return postPayment(key, payment, 201);
+          }));
+      start.countDown();
+
+      assertEquals(futures.get(0).get(), futures.get(1).get());
+    } finally {
+      executor.shutdownNow();
+    }
+    verify(bankSimulatorClient, times(1)).processPayment(payment);
+  }
+
+  @Test
+  void concurrentRequestsWithDifferentKeysDoNotBlockEachOther() throws Exception {
+    PaymentRequest payment = getPaymentRequest(Currency.getInstance("EUR"));
+    CountDownLatch bothBankCallsStarted = new CountDownLatch(2);
+    when(bankSimulatorClient.processPayment(payment)).thenAnswer(invocation -> {
+      bothBankCallsStarted.countDown();
+      assertTrue(bothBankCallsStarted.await(1, TimeUnit.SECONDS));
+      return new BankPaymentResponse(false, null);
+    });
+
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      Future<PaymentResponse> first = executor.submit(
+          () -> postPayment(UUID.randomUUID().toString(), payment, 201));
+      Future<PaymentResponse> second = executor.submit(
+          () -> postPayment(UUID.randomUUID().toString(), payment, 201));
+
+      assertNotEquals(first.get().getId(), second.get().getId());
+    } finally {
+      executor.shutdownNow();
+    }
+    verify(bankSimulatorClient, times(2)).processPayment(payment);
+  }
+
+  @Test
   void whenExpiryDateIsNotInTheFutureThenPaymentIsRejected() throws Exception {
     PaymentRequest expiredPayment = getPaymentRequest(Currency.getInstance("GBP"))
         .setExpiryMonth(1)
         .setExpiryYear(2020);
 
     mvc.perform(MockMvcRequestBuilders.post("/payments")
+            .header("Idempotency-Key", UUID.randomUUID().toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(expiredPayment)))
         .andExpect(status().isBadRequest())
@@ -136,6 +235,7 @@ class PaymentGatewayControllerIntegrationTest {
     PaymentRequest paymentRequestWithUnsupportedCurrency = getPaymentRequest(
         Currency.getInstance("JPY"));
     mvc.perform(MockMvcRequestBuilders.post("/payments")
+            .header("Idempotency-Key", UUID.randomUUID().toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(paymentRequestWithUnsupportedCurrency)))
         .andExpect(status().isBadRequest())
@@ -153,6 +253,7 @@ class PaymentGatewayControllerIntegrationTest {
         .setExpiryYear(2020);
 
     mvc.perform(MockMvcRequestBuilders.post("/payments")
+            .header("Idempotency-Key", UUID.randomUUID().toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(invalidPayment)))
         .andExpect(status().isBadRequest())
@@ -199,6 +300,17 @@ class PaymentGatewayControllerIntegrationTest {
       throws JsonProcessingException, UnsupportedEncodingException {
     return objectMapper.readValue(result.getResponse().getContentAsString(),
         PaymentResponse.class);
+  }
+
+  private PaymentResponse postPayment(String idempotencyKey, PaymentRequest payment,
+      int expectedStatus) throws Exception {
+    MvcResult result = mvc.perform(MockMvcRequestBuilders.post("/payments")
+            .header("Idempotency-Key", idempotencyKey)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(payment)))
+        .andExpect(status().is(expectedStatus))
+        .andReturn();
+    return convertResultToObject(result);
   }
 
 }

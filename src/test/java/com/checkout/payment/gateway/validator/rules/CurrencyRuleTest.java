@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.checkout.payment.gateway.configuration.PaymentProperties;
 import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import com.checkout.payment.gateway.validator.ValidationResult;
+import com.checkout.payment.gateway.validator.PaymentValidationContext;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -17,16 +18,16 @@ class CurrencyRuleTest {
 
   @Test
   void acceptsSupportedCurrency() {
-    ValidationResult result = currencyRule.validate(
-        new PaymentRequest().setCurrency("GBP"));
+    ValidationResult result = currencyRule.validate(new PaymentValidationContext(
+        "payment-key", new PaymentRequest().setCurrency("GBP")));
 
     assertTrue(result.isValid());
   }
 
   @Test
   void rejectsUnsupportedCurrencyWithFieldAndMessage() {
-    ValidationResult result = currencyRule.validate(
-        new PaymentRequest().setCurrency("JPY"));
+    ValidationResult result = currencyRule.validate(new PaymentValidationContext(
+        "payment-key", new PaymentRequest().setCurrency("JPY")));
 
     assertFalse(result.isValid());
     assertEquals("currency", result.getField());
