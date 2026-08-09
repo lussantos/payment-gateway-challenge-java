@@ -3,12 +3,15 @@ package com.checkout.payment.gateway.service;
 import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
 import com.checkout.payment.gateway.enums.PaymentStatus;
 import com.checkout.payment.gateway.exception.EventProcessingException;
-import com.checkout.payment.gateway.exception.InvalidPaymentRequestException;
+import com.checkout.payment.gateway.exception.PaymentValidationError;
+import com.checkout.payment.gateway.exception.PaymentValidationException;
 import com.checkout.payment.gateway.model.Payment;
 import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import com.checkout.payment.gateway.model.dto.PaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
-import java.time.YearMonth;
+import com.checkout.payment.gateway.validator.PaymentValidator;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -23,8 +26,8 @@ public class PaymentGatewayService {
 
   private final PaymentsRepository paymentsRepository;
   private final BankSimulatorService bankSimulatorService;
-  private final CurrencyValidationService currencyValidationService;
   private final PaymentEncryptionService paymentEncryptionService;
+  private final PaymentValidator paymentValidator;
 
   public PaymentResponse getPaymentById(UUID id) {
     LOG.debug("Requesting access to to payment with ID {}", id);
@@ -35,15 +38,23 @@ public class PaymentGatewayService {
 
   public PaymentResponse processPayment(PaymentRequest paymentRequest) {
     LOG.debug("Requesting payment processing with object: {}", paymentRequest);
-    validateExpiryDate(paymentRequest);
-    currencyValidationService.validate(paymentRequest.getCurrency());
-    BankPaymentResponse bankResponse = bankSimulatorService.getBankResponse(paymentRequest);
+    validatePaymentRequest(paymentRequest);
+    BankPaymentResponse bankResponse = bankSimulatorService.processBankPayment(paymentRequest);
     Payment payment = mapAndPersistPayment(paymentRequest, bankResponse);
     return mapPaymentResponse(payment);
   }
 
+  private void validatePaymentRequest(PaymentRequest paymentRequest) {
+    List<PaymentValidationError> errors = paymentValidator.validate(paymentRequest);
+    if (!errors.isEmpty()) {
+      throw new PaymentValidationException(errors);
+    }
+  }
+
   private Payment mapAndPersistPayment(PaymentRequest paymentRequest, BankPaymentResponse bankResponse) {
-    Payment payment = Payment.from(paymentRequest);
+    Payment payment = Payment.from(paymentRequest)
+        .setId(UUID.randomUUID())
+        .setCreated(Instant.now());
     applyBankResponse(payment, bankResponse);
     encryptSensitiveData(payment);
     paymentsRepository.add(payment);
@@ -54,15 +65,6 @@ public class PaymentGatewayService {
     payment
         .setCardNumber(paymentEncryptionService.encrypt(payment.getCardNumber()))
         .setCvv(paymentEncryptionService.encrypt(payment.getCvv()));
-  }
-
-  private void validateExpiryDate(PaymentRequest paymentRequest) {
-    YearMonth expiryDate = YearMonth.of(
-        paymentRequest.getExpiryYear(), paymentRequest.getExpiryMonth());
-
-    if (!expiryDate.isAfter(YearMonth.now())) {
-      throw new InvalidPaymentRequestException("Expiry date must be in the future");
-    }
   }
 
   private void applyBankResponse(Payment payment,

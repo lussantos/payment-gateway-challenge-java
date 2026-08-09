@@ -31,7 +31,7 @@ class BankSimulatorServiceTest {
     PaymentRequest paymentRequest = getPaymentRequest();
     BankPaymentResponse expectedResponse = new BankPaymentResponse(true, "authorization-code");
     when(bankSimulatorClient.processPayment(paymentRequest)).thenReturn(expectedResponse);
-    BankPaymentResponse response = bankSimulatorService.getBankResponse(paymentRequest);
+    BankPaymentResponse response = bankSimulatorService.processBankPayment(paymentRequest);
 
     assertEquals(expectedResponse, response);
   }
@@ -44,7 +44,7 @@ class BankSimulatorServiceTest {
 
     BankIntegrationException exception = assertThrows(
         BankIntegrationException.class,
-        () -> bankSimulatorService.getBankResponse(paymentRequest));
+        () -> bankSimulatorService.processBankPayment(paymentRequest));
 
     assertEquals("Unable to process payment with the acquiring bank", exception.getMessage());
     assertSame(clientException, exception.getCause());
@@ -57,7 +57,7 @@ class BankSimulatorServiceTest {
 
     BankIntegrationException exception = assertThrows(
         BankIntegrationException.class,
-        () -> bankSimulatorService.getBankResponse(paymentRequest));
+        () -> bankSimulatorService.processBankPayment(paymentRequest));
 
     assertEquals("The acquiring bank returned an empty response", exception.getMessage());
   }
@@ -69,7 +69,7 @@ class BankSimulatorServiceTest {
 
     BankIntegrationException exception = assertThrows(
         BankIntegrationException.class,
-        () -> bankSimulatorService.getBankResponse(paymentRequest));
+        () -> bankSimulatorService.processBankPayment(paymentRequest));
 
     assertEquals("The acquiring bank returned an empty authorized field value.", exception.getMessage());
   }

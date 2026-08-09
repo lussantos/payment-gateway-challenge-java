@@ -1,6 +1,7 @@
 package com.checkout.payment.gateway.controller;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.Mockito.never;
@@ -82,7 +83,7 @@ class PaymentGatewayControllerIntegrationTest {
     MvcResult result = mvc.perform(MockMvcRequestBuilders.post("/payment")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(payment)))
-        .andExpect(status().isOk())
+        .andExpect(status().isCreated())
         .andExpect(jsonPath("$.status").value(PaymentStatus.AUTHORIZED.getName()))
         .andExpect(jsonPath("$.card_number_last_four").value("8877"))
         .andExpect(jsonPath("$.expiry_month").value(payment.getExpiryMonth()))
@@ -122,7 +123,9 @@ class PaymentGatewayControllerIntegrationTest {
             .content(objectMapper.writeValueAsString(expiredPayment)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.status").value(PaymentStatus.REJECTED.getName()))
-        .andExpect(jsonPath("$.error_message").value("Expiry date must be in the future"));
+        .andExpect(jsonPath("$.error_message").value("Expiry date must be in the future"))
+        .andExpect(jsonPath("$.errors[0].field").value("expiry_date"))
+        .andExpect(jsonPath("$.errors[0].message").value("Expiry date must be in the future"));
 
     verify(bankSimulatorClient, never()).processPayment(expiredPayment);
   }
@@ -136,9 +139,31 @@ class PaymentGatewayControllerIntegrationTest {
             .content(objectMapper.writeValueAsString(paymentRequestWithUnsupportedCurrency)))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.status").value(PaymentStatus.REJECTED.getName()))
-        .andExpect(jsonPath("$.error_message", containsString("Currency must be one of:")));
+        .andExpect(jsonPath("$.error_message", containsString("Currency 'JPY' is not supported")))
+        .andExpect(jsonPath("$.errors[0].field").value("currency"));
 
     verify(bankSimulatorClient, never()).processPayment(paymentRequestWithUnsupportedCurrency);
+  }
+
+  @Test
+  void whenMultipleBusinessRulesFailThenEveryErrorIsReturned() throws Exception {
+    PaymentRequest invalidPayment = getPaymentRequest(Currency.getInstance("JPY"))
+        .setExpiryMonth(1)
+        .setExpiryYear(2020);
+
+    mvc.perform(MockMvcRequestBuilders.post("/payment")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(invalidPayment)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(PaymentStatus.REJECTED.getName()))
+        .andExpect(jsonPath("$.error_message", containsString(
+            "Expiry date must be in the future")))
+        .andExpect(jsonPath("$.error_message", containsString(
+            "Currency 'JPY' is not supported")))
+        .andExpect(jsonPath("$.errors[*].field",
+            containsInAnyOrder("expiry_date", "currency")));
+
+    verify(bankSimulatorClient, never()).processPayment(invalidPayment);
   }
 
   private static PaymentRequest getPaymentRequest(Currency currency) {

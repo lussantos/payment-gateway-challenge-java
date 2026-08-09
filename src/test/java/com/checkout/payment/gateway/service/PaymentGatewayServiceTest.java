@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -14,14 +13,17 @@ import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
 import com.checkout.payment.gateway.enums.PaymentStatus;
 import com.checkout.payment.gateway.exception.BankIntegrationException;
 import com.checkout.payment.gateway.exception.EventProcessingException;
-import com.checkout.payment.gateway.exception.InvalidPaymentRequestException;
+import com.checkout.payment.gateway.exception.PaymentValidationError;
+import com.checkout.payment.gateway.exception.PaymentValidationException;
 import com.checkout.payment.gateway.model.Payment;
 import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import com.checkout.payment.gateway.model.dto.PaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
+import com.checkout.payment.gateway.validator.PaymentValidator;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Currency;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -55,7 +57,7 @@ class PaymentGatewayServiceTest {
   private BankSimulatorService bankSimulatorService;
 
   @Mock
-  private CurrencyValidationService currencyValidationService;
+  private PaymentValidator paymentValidator;
 
   @Mock
   private PaymentEncryptionService paymentEncryptionService;
@@ -95,8 +97,8 @@ class PaymentGatewayServiceTest {
     BankPaymentResponse bankResponse = new BankPaymentResponse(
         authorized, AUTHORIZATION_CODE.toString());
 
-    doNothing().when(currencyValidationService).validate(paymentRequest.getCurrency());
-    when(bankSimulatorService.getBankResponse(paymentRequest)).thenReturn(bankResponse);
+    when(paymentValidator.validate(paymentRequest)).thenReturn(List.of());
+    when(bankSimulatorService.processBankPayment(paymentRequest)).thenReturn(bankResponse);
     when(paymentEncryptionService.encrypt(CARD_NUMBER)).thenReturn(ENCRYPTED_CARD_NUMBER);
     when(paymentEncryptionService.encrypt(CVV)).thenReturn(ENCRYPTED_CVV);
     when(paymentEncryptionService.decrypt(ENCRYPTED_CARD_NUMBER)).thenReturn(CARD_NUMBER);
@@ -114,36 +116,26 @@ class PaymentGatewayServiceTest {
   }
 
   @Test
-  void rejectsUnsupportedCurrency() {
-    PaymentRequest paymentRequest = getPaymentRequest().setCurrency("JPY");
-    InvalidPaymentRequestException expectedException =
-        new InvalidPaymentRequestException("Currency must be one of: USD, EUR, GBP");
-    doThrow(expectedException)
-        .when(currencyValidationService).validate(paymentRequest.getCurrency());
+  void rejectsAllValidationErrorsBeforeCallingDependencies() {
+    PaymentRequest invalidPayment = getPaymentRequest()
+        .setExpiryMonth(1)
+        .setExpiryYear(2020)
+        .setCurrency("JPY");
+    List<PaymentValidationError> validationErrors = List.of(
+        new PaymentValidationError("expiry_date", "Expiry date must be in the future"),
+        new PaymentValidationError("currency", "Currency 'JPY' is not supported"));
+    when(paymentValidator.validate(invalidPayment)).thenReturn(validationErrors);
 
-    InvalidPaymentRequestException exception = assertThrows(
-        InvalidPaymentRequestException.class,
-        () -> paymentGatewayService.processPayment(paymentRequest));
+    PaymentValidationException exception = assertThrows(
+        PaymentValidationException.class,
+        () -> paymentGatewayService.processPayment(invalidPayment));
 
-    assertSame(expectedException, exception);
+    assertEquals(validationErrors, exception.getErrors());
+    assertEquals(
+        "Expiry date must be in the future; Currency 'JPY' is not supported",
+        exception.getMessage());
     verifyNoInteractions(
         bankSimulatorService, paymentEncryptionService, paymentsRepository);
-  }
-
-  @Test
-  void rejectsExpiredPaymentBeforeCallingDependencies() {
-    PaymentRequest expiredPayment = getPaymentRequest()
-        .setExpiryMonth(1)
-        .setExpiryYear(2020);
-
-    InvalidPaymentRequestException exception = assertThrows(
-        InvalidPaymentRequestException.class,
-        () -> paymentGatewayService.processPayment(expiredPayment));
-
-    assertEquals("Expiry date must be in the future", exception.getMessage());
-    verifyNoInteractions(
-        currencyValidationService, bankSimulatorService, paymentEncryptionService,
-        paymentsRepository);
   }
 
   @Test
@@ -151,8 +143,8 @@ class PaymentGatewayServiceTest {
     PaymentRequest paymentRequest = getPaymentRequest();
     BankIntegrationException expectedException =
         new BankIntegrationException("Unable to process payment with the acquiring bank");
-    doNothing().when(currencyValidationService).validate(paymentRequest.getCurrency());
-    when(bankSimulatorService.getBankResponse(paymentRequest)).thenThrow(expectedException);
+    when(paymentValidator.validate(paymentRequest)).thenReturn(List.of());
+    when(bankSimulatorService.processBankPayment(paymentRequest)).thenThrow(expectedException);
 
     BankIntegrationException exception = assertThrows(
         BankIntegrationException.class,
@@ -189,8 +181,7 @@ class PaymentGatewayServiceTest {
         .setAmount(BigInteger.valueOf(100))
         .setCvv(ENCRYPTED_CVV)
         .setAuthorizationCode(status == PaymentStatus.AUTHORIZED ? AUTHORIZATION_CODE : null)
-        .setCreated(PAYMENT_TIME)
-        .setUpdated(PAYMENT_TIME);
+        .setCreated(PAYMENT_TIME);
   }
 
   private static PaymentResponse getPaymentResponse(PaymentStatus status) {

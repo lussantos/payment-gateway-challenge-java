@@ -28,20 +28,14 @@ public class Payment {
   private String cvv;
   private UUID authorizationCode;
   private Instant created;
-  private Instant updated;
 
   public static Payment from(PaymentRequest paymentRequest) {
-    Instant now = Instant.now();
-
     return new Payment()
-        .setId(UUID.randomUUID())
         .setCardNumber(paymentRequest.getCardNumber())
         .setExpiryMonth(paymentRequest.getExpiryMonth())
         .setExpiryYear(paymentRequest.getExpiryYear())
         .setCurrency(paymentRequest.getCurrency())
         .setAmount(paymentRequest.getAmount())
-        .setCvv(paymentRequest.getCvv())
-        .setCreated(now)
-        .setUpdated(now);
+        .setCvv(paymentRequest.getCvv());
   }
 }

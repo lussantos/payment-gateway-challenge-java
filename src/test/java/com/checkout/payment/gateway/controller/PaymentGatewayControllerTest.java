@@ -1,5 +1,6 @@
 package com.checkout.payment.gateway.controller;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.checkout.payment.gateway.enums.PaymentStatus;
+import com.checkout.payment.gateway.exception.PaymentValidationError;
 import com.checkout.payment.gateway.model.dto.PostPaymentErrorResponse;
 import com.checkout.payment.gateway.service.PaymentGatewayService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,7 +49,7 @@ class PaymentGatewayControllerTest {
   @ParameterizedTest(name = "[{index}] rejects invalid payment request")
   @MethodSource("invalidPaymentRequests")
   void whenPaymentRequestIsInvalidThenItIsRejectedWithoutProcessing(String request,
-      List<String> requiredErrorMessages) throws Exception {
+      List<String> requiredErrorMessages, List<String> expectedFields) throws Exception {
 
     MvcResult result = mvc.perform(
             MockMvcRequestBuilders.post("/payment").contentType(MediaType.APPLICATION_JSON)
@@ -59,6 +61,9 @@ class PaymentGatewayControllerTest {
     requiredErrorMessages.forEach(
         requiredMessage -> assertTrue(response.getErrorMessage().contains(requiredMessage),
             () -> "Expected error message to contain: " + requiredMessage));
+    assertEquals(expectedFields, response.getErrors().stream()
+        .map(PaymentValidationError::field)
+        .toList());
 
     verify(paymentGatewayService, never()).processPayment(any());
   }
@@ -73,11 +78,12 @@ class PaymentGatewayControllerTest {
               "amount": 0.5,
               "cvv": "123"
             }
-            """, List.of("Payment request body is malformed")),
+            """, List.of("Payment request body is malformed"), List.of()),
         Arguments.of("{}",
             List.of("Card number is required", "Expiry month is required",
                 "Expiry year is required",
-                "Currency is required", "Amount is required", "CVV is required")),
+                "Currency is required", "Amount is required", "CVV is required"),
+            List.of("amount", "card_number", "currency", "cvv", "expiry_month", "expiry_year")),
         Arguments.of("""
             {
               "card_number": "1234",
@@ -91,7 +97,8 @@ class PaymentGatewayControllerTest {
             "Card number must contain between 14 and 19 digits",
             "Expiry year must have at least 4 digits.",
             "Expiry month value must be from 1 to 12",
-            "CVV must contain 3 or 4 digits")));
+            "CVV must contain 3 or 4 digits"),
+            List.of("card_number", "cvv", "expiry_month", "expiry_year")));
   }
 
 }

@@ -14,7 +14,7 @@ public class BankSimulatorService {
 
   private final BankSimulatorClient bankSimulatorClient;
 
-  public BankPaymentResponse getBankResponse(PaymentRequest paymentRequest) {
+  public BankPaymentResponse processBankPayment(PaymentRequest paymentRequest) {
     try {
       BankPaymentResponse bankResponse = bankSimulatorClient.processPayment(paymentRequest);
       validateResponse(bankResponse);

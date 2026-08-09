@@ -2,7 +2,7 @@ package com.checkout.payment.gateway.model;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import java.math.BigInteger;
@@ -23,14 +23,13 @@ class PaymentTest {
     Payment payment = Payment.from(request);
 
     assertAll(
-        () -> assertNotNull(payment.getId()),
+        () -> assertNull(payment.getId()),
         () -> assertEquals(request.getCardNumber(), payment.getCardNumber()),
         () -> assertEquals(request.getExpiryMonth(), payment.getExpiryMonth()),
         () -> assertEquals(request.getExpiryYear(), payment.getExpiryYear()),
         () -> assertEquals(request.getCurrency(), payment.getCurrency()),
         () -> assertEquals(request.getAmount(), payment.getAmount()),
         () -> assertEquals(request.getCvv(), payment.getCvv()),
-        () -> assertNotNull(payment.getCreated()),
-        () -> assertEquals(payment.getCreated(), payment.getUpdated()));
+        () -> assertNull(payment.getCreated()));
   }
 }
