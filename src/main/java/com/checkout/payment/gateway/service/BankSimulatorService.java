@@ -3,7 +3,7 @@ package com.checkout.payment.gateway.service;
 import com.checkout.payment.gateway.client.BankSimulatorClient;
 import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
 import com.checkout.payment.gateway.exception.BankIntegrationException;
-import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -14,7 +14,7 @@ public class BankSimulatorService {
 
   private final BankSimulatorClient bankSimulatorClient;
 
-  public BankPaymentResponse getBankResponse(PostPaymentRequest paymentRequest) {
+  public BankPaymentResponse getBankResponse(PaymentRequest paymentRequest) {
     try {
       BankPaymentResponse bankResponse = bankSimulatorClient.processPayment(paymentRequest);
       validateResponse(bankResponse);

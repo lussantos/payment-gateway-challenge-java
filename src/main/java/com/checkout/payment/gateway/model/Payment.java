@@ -1,7 +1,7 @@
 package com.checkout.payment.gateway.model;
 
 import com.checkout.payment.gateway.enums.PaymentStatus;
-import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.UUID;
@@ -30,7 +30,7 @@ public class Payment {
   private Instant created;
   private Instant updated;
 
-  public static Payment from(PostPaymentRequest paymentRequest) {
+  public static Payment from(PaymentRequest paymentRequest) {
     Instant now = Instant.now();
 
     return new Payment()

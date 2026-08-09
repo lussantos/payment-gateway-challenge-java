@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import com.checkout.payment.gateway.client.BankSimulatorClient;
 import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
 import com.checkout.payment.gateway.exception.BankIntegrationException;
-import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import java.math.BigInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +28,7 @@ class BankSimulatorServiceTest {
 
   @Test
   void returnsBankResponse() {
-    PostPaymentRequest paymentRequest = getPaymentRequest();
+    PaymentRequest paymentRequest = getPaymentRequest();
     BankPaymentResponse expectedResponse = new BankPaymentResponse(true, "authorization-code");
     when(bankSimulatorClient.processPayment(paymentRequest)).thenReturn(expectedResponse);
     BankPaymentResponse response = bankSimulatorService.getBankResponse(paymentRequest);
@@ -38,7 +38,7 @@ class BankSimulatorServiceTest {
 
   @Test
   void translatesRestClientFailureAndPreservesCause() {
-    PostPaymentRequest paymentRequest = getPaymentRequest();
+    PaymentRequest paymentRequest = getPaymentRequest();
     ResourceAccessException clientException = new ResourceAccessException("Connection refused");
     when(bankSimulatorClient.processPayment(paymentRequest)).thenThrow(clientException);
 
@@ -52,7 +52,7 @@ class BankSimulatorServiceTest {
 
   @Test
   void rejectsEmptyBankResponse() {
-    PostPaymentRequest paymentRequest = getPaymentRequest();
+    PaymentRequest paymentRequest = getPaymentRequest();
     when(bankSimulatorClient.processPayment(paymentRequest)).thenReturn(null);
 
     BankIntegrationException exception = assertThrows(
@@ -64,7 +64,7 @@ class BankSimulatorServiceTest {
 
   @Test
   void rejectsEmptyAuthorizedInBankResponse() {
-    PostPaymentRequest paymentRequest = getPaymentRequest();
+    PaymentRequest paymentRequest = getPaymentRequest();
     when(bankSimulatorClient.processPayment(paymentRequest)).thenReturn(new BankPaymentResponse(null, "authorization-code"));
 
     BankIntegrationException exception = assertThrows(
@@ -74,8 +74,8 @@ class BankSimulatorServiceTest {
     assertEquals("The acquiring bank returned an empty authorized field value.", exception.getMessage());
   }
 
-  private static PostPaymentRequest getPaymentRequest() {
-    return new PostPaymentRequest()
+  private static PaymentRequest getPaymentRequest() {
+    return new PaymentRequest()
         .setCardNumber("2222405343248877")
         .setExpiryMonth(4)
         .setExpiryYear(2099)

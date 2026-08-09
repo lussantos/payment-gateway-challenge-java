@@ -1,6 +1,6 @@
 package com.checkout.payment.gateway.client.dto;
 
-import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigInteger;
 
@@ -13,7 +13,7 @@ public record BankPaymentRequest(
     BigInteger amount,
     String cvv) {
 
-  public static BankPaymentRequest from(PostPaymentRequest paymentRequest) {
+  public static BankPaymentRequest from(PaymentRequest paymentRequest) {
     String expiryDate = String.format(
         "%02d/%04d", paymentRequest.getExpiryMonth(), paymentRequest.getExpiryYear());
 

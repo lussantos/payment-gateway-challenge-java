@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import java.math.BigInteger;
 import org.junit.jupiter.api.Test;
 
@@ -12,7 +12,7 @@ class PaymentTest {
 
   @Test
   void createsPaymentFromRequest() {
-    PostPaymentRequest request = new PostPaymentRequest()
+    PaymentRequest request = new PaymentRequest()
         .setCardNumber("2222405343248877")
         .setExpiryMonth(4)
         .setExpiryYear(2099)

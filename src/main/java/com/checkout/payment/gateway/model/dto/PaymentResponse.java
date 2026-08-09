@@ -20,7 +20,7 @@ import java.util.UUID;
 @ToString
 @NoArgsConstructor
 @EqualsAndHashCode
-public class PostPaymentResponse {
+public class PaymentResponse {
 
   private UUID id;
 
@@ -39,8 +39,8 @@ public class PostPaymentResponse {
 
   private BigInteger amount;
 
-  public static PostPaymentResponse from(Payment payment, String decryptedCardNumber) {
-    return new PostPaymentResponse()
+  public static PaymentResponse from(Payment payment, String decryptedCardNumber) {
+    return new PaymentResponse()
         .setId(payment.getId())
         .setStatus(payment.getStatus())
         .setCardNumberLastFour(StringUtil.getLastFourDigits(decryptedCardNumber))

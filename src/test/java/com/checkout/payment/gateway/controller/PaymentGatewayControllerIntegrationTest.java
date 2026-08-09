@@ -13,8 +13,8 @@ import com.checkout.payment.gateway.client.BankSimulatorClient;
 import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
 import com.checkout.payment.gateway.enums.PaymentStatus;
 import com.checkout.payment.gateway.model.Payment;
-import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
-import com.checkout.payment.gateway.model.dto.PostPaymentResponse;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
 import com.checkout.payment.gateway.service.PaymentEncryptionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -53,7 +53,7 @@ class PaymentGatewayControllerIntegrationTest {
   @Test
   void whenPaymentWithIdExistThenCorrectPaymentIsReturned() throws Exception {
     Payment payment = getStoredPayment();
-    PostPaymentResponse expectedResponse = getPaymentResponse(payment);
+    PaymentResponse expectedResponse = getPaymentResponse(payment);
 
     paymentsRepository.add(payment);
 
@@ -74,7 +74,7 @@ class PaymentGatewayControllerIntegrationTest {
 
   @Test
   void whenPaymentProcessingIsSucceededThenSuccessfulResponseIsReturned() throws Exception {
-    PostPaymentRequest payment = getPaymentRequest(Currency.getInstance("USD"));
+    PaymentRequest payment = getPaymentRequest(Currency.getInstance("USD"));
     BankPaymentResponse bankResponse = new BankPaymentResponse(
         true, "99b8d797-4456-42b4-9b1f-21499d6aaf46");
     when(bankSimulatorClient.processPayment(payment)).thenReturn(bankResponse);
@@ -91,9 +91,9 @@ class PaymentGatewayControllerIntegrationTest {
         .andExpect(jsonPath("$.amount").value(payment.getAmount().intValueExact()))
         .andReturn();
 
-    PostPaymentResponse response = convertResultToObject(result);
+    PaymentResponse response = convertResultToObject(result);
     Payment storedPayment = paymentsRepository.get(response.getId()).orElseThrow();
-    PostPaymentResponse expectedResponse = getPaymentResponse(storedPayment);
+    PaymentResponse expectedResponse = getPaymentResponse(storedPayment);
 
     assertEquals(expectedResponse, response);
 
@@ -113,7 +113,7 @@ class PaymentGatewayControllerIntegrationTest {
 
   @Test
   void whenExpiryDateIsNotInTheFutureThenPaymentIsRejected() throws Exception {
-    PostPaymentRequest expiredPayment = getPaymentRequest(Currency.getInstance("GBP"))
+    PaymentRequest expiredPayment = getPaymentRequest(Currency.getInstance("GBP"))
         .setExpiryMonth(1)
         .setExpiryYear(2020);
 
@@ -129,7 +129,7 @@ class PaymentGatewayControllerIntegrationTest {
 
   @Test
   void whenCurrencyIsNotSupportedThenItIsRejectedByTheService() throws Exception {
-    PostPaymentRequest paymentRequestWithUnsupportedCurrency = getPaymentRequest(
+    PaymentRequest paymentRequestWithUnsupportedCurrency = getPaymentRequest(
         Currency.getInstance("JPY"));
     mvc.perform(MockMvcRequestBuilders.post("/payment")
             .contentType(MediaType.APPLICATION_JSON)
@@ -141,8 +141,8 @@ class PaymentGatewayControllerIntegrationTest {
     verify(bankSimulatorClient, never()).processPayment(paymentRequestWithUnsupportedCurrency);
   }
 
-  private static PostPaymentRequest getPaymentRequest(Currency currency) {
-    return new PostPaymentRequest()
+  private static PaymentRequest getPaymentRequest(Currency currency) {
+    return new PaymentRequest()
         .setCardNumber("2222405343248877")
         .setExpiryMonth(12)
         .setExpiryYear(2099)
@@ -151,9 +151,9 @@ class PaymentGatewayControllerIntegrationTest {
         .setCvv("123");
   }
 
-  private PostPaymentResponse getPaymentResponse(Payment payment) {
+  private PaymentResponse getPaymentResponse(Payment payment) {
     String cardNumber = paymentEncryptionService.decrypt(payment.getCardNumber());
-    return PostPaymentResponse.from(payment, cardNumber);
+    return PaymentResponse.from(payment, cardNumber);
   }
 
   private Payment getStoredPayment() {
@@ -168,10 +168,10 @@ class PaymentGatewayControllerIntegrationTest {
         .setCvv(paymentEncryptionService.encrypt("123"));
   }
 
-  private PostPaymentResponse convertResultToObject(MvcResult result)
+  private PaymentResponse convertResultToObject(MvcResult result)
       throws JsonProcessingException, UnsupportedEncodingException {
     return objectMapper.readValue(result.getResponse().getContentAsString(),
-        PostPaymentResponse.class);
+        PaymentResponse.class);
   }
 
 }

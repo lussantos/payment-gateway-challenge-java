@@ -16,8 +16,8 @@ import com.checkout.payment.gateway.exception.BankIntegrationException;
 import com.checkout.payment.gateway.exception.EventProcessingException;
 import com.checkout.payment.gateway.exception.InvalidPaymentRequestException;
 import com.checkout.payment.gateway.model.Payment;
-import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
-import com.checkout.payment.gateway.model.dto.PostPaymentResponse;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
 import java.math.BigInteger;
 import java.time.Instant;
@@ -66,11 +66,11 @@ class PaymentGatewayServiceTest {
   @Test
   void returnsPaymentWhenItExists() {
     Payment storedPayment = getPayment(PaymentStatus.AUTHORIZED);
-    PostPaymentResponse expectedResponse = getPaymentResponse(PaymentStatus.AUTHORIZED);
+    PaymentResponse expectedResponse = getPaymentResponse(PaymentStatus.AUTHORIZED);
     when(paymentsRepository.get(PAYMENT_ID)).thenReturn(Optional.of(storedPayment));
     when(paymentEncryptionService.decrypt(ENCRYPTED_CARD_NUMBER)).thenReturn(CARD_NUMBER);
 
-    PostPaymentResponse response = paymentGatewayService.getPaymentById(PAYMENT_ID);
+    PaymentResponse response = paymentGatewayService.getPaymentById(PAYMENT_ID);
 
     assertEquals(expectedResponse, response);
   }
@@ -89,9 +89,9 @@ class PaymentGatewayServiceTest {
   @ParameterizedTest(name = "bank authorized={0} maps to {1}")
   @MethodSource("bankDecisions")
   void processesBankDecision(boolean authorized, PaymentStatus expectedStatus) {
-    PostPaymentRequest paymentRequest = getPaymentRequest();
+    PaymentRequest paymentRequest = getPaymentRequest();
     Payment expectedPayment = getPayment(expectedStatus);
-    PostPaymentResponse expectedResponse = getPaymentResponse(expectedStatus);
+    PaymentResponse expectedResponse = getPaymentResponse(expectedStatus);
     BankPaymentResponse bankResponse = new BankPaymentResponse(
         authorized, AUTHORIZATION_CODE.toString());
 
@@ -107,7 +107,7 @@ class PaymentGatewayServiceTest {
       uuid.when(UUID::randomUUID).thenReturn(PAYMENT_ID);
       instant.when(Instant::now).thenReturn(PAYMENT_TIME);
 
-      PostPaymentResponse response = paymentGatewayService.processPayment(paymentRequest);
+      PaymentResponse response = paymentGatewayService.processPayment(paymentRequest);
 
       assertEquals(expectedResponse, response);
     }
@@ -115,7 +115,7 @@ class PaymentGatewayServiceTest {
 
   @Test
   void rejectsUnsupportedCurrency() {
-    PostPaymentRequest paymentRequest = getPaymentRequest().setCurrency("JPY");
+    PaymentRequest paymentRequest = getPaymentRequest().setCurrency("JPY");
     InvalidPaymentRequestException expectedException =
         new InvalidPaymentRequestException("Currency must be one of: USD, EUR, GBP");
     doThrow(expectedException)
@@ -132,7 +132,7 @@ class PaymentGatewayServiceTest {
 
   @Test
   void rejectsExpiredPaymentBeforeCallingDependencies() {
-    PostPaymentRequest expiredPayment = getPaymentRequest()
+    PaymentRequest expiredPayment = getPaymentRequest()
         .setExpiryMonth(1)
         .setExpiryYear(2020);
 
@@ -148,7 +148,7 @@ class PaymentGatewayServiceTest {
 
   @Test
   void doesNotPersistPaymentWhenBankIntegrationFails() {
-    PostPaymentRequest paymentRequest = getPaymentRequest();
+    PaymentRequest paymentRequest = getPaymentRequest();
     BankIntegrationException expectedException =
         new BankIntegrationException("Unable to process payment with the acquiring bank");
     doNothing().when(currencyValidationService).validate(paymentRequest.getCurrency());
@@ -168,8 +168,8 @@ class PaymentGatewayServiceTest {
         Arguments.of(false, PaymentStatus.DECLINED));
   }
 
-  private static PostPaymentRequest getPaymentRequest() {
-    return new PostPaymentRequest()
+  private static PaymentRequest getPaymentRequest() {
+    return new PaymentRequest()
         .setCardNumber(CARD_NUMBER)
         .setExpiryMonth(4)
         .setExpiryYear(2099)
@@ -193,8 +193,8 @@ class PaymentGatewayServiceTest {
         .setUpdated(PAYMENT_TIME);
   }
 
-  private static PostPaymentResponse getPaymentResponse(PaymentStatus status) {
-    return new PostPaymentResponse()
+  private static PaymentResponse getPaymentResponse(PaymentStatus status) {
+    return new PaymentResponse()
         .setId(PAYMENT_ID)
         .setStatus(status)
         .setCardNumberLastFour("8877")

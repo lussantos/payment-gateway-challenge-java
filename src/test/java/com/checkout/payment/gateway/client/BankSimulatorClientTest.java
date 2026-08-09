@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import com.checkout.payment.gateway.client.dto.BankPaymentRequest;
 import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
 import com.checkout.payment.gateway.configuration.BankSimulatorProperties;
-import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import java.math.BigInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,8 +55,8 @@ class BankSimulatorClientTest {
         "123");
   }
 
-  private static PostPaymentRequest getPaymentRequest() {
-    return new PostPaymentRequest()
+  private static PaymentRequest getPaymentRequest() {
+    return new PaymentRequest()
         .setCardNumber("2222405343248877")
         .setExpiryMonth(4)
         .setExpiryYear(2099)

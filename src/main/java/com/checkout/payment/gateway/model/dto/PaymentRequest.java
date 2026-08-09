@@ -17,7 +17,7 @@ import lombok.experimental.Accessors;
 @Setter
 @Accessors(chain = true)
 @EqualsAndHashCode
-public class PostPaymentRequest implements Serializable {
+public class PaymentRequest implements Serializable {
 
   @JsonProperty("card_number")
   @NotBlank(message = "Card number is required")

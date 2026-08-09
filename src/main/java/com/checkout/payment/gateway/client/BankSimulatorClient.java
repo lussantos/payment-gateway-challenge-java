@@ -3,7 +3,7 @@ package com.checkout.payment.gateway.client;
 import com.checkout.payment.gateway.client.dto.BankPaymentRequest;
 import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
 import com.checkout.payment.gateway.configuration.BankSimulatorProperties;
-import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -20,7 +20,7 @@ public class BankSimulatorClient {
     this.bankSimulatorProperties = bankSimulatorProperties;
   }
 
-  public BankPaymentResponse processPayment(PostPaymentRequest paymentRequest) {
+  public BankPaymentResponse processPayment(PaymentRequest paymentRequest) {
     return restTemplate.postForObject(
         bankSimulatorProperties.paymentsUrl(),
         BankPaymentRequest.from(paymentRequest),

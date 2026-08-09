@@ -10,7 +10,7 @@ import java.util.Currency;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
-class PostPaymentResponseTest {
+class PaymentResponseTest {
 
   @Test
   void createsResponseFieldsFromPayment() {
@@ -25,7 +25,7 @@ class PostPaymentResponseTest {
         .setAmount(BigInteger.valueOf(100))
         .setCvv("encrypted-cvv");
 
-    PostPaymentResponse response = PostPaymentResponse.from(
+    PaymentResponse response = PaymentResponse.from(
         payment, "2222405343248877");
 
     assertAll(
