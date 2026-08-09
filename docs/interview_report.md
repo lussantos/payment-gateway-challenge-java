@@ -192,7 +192,7 @@ _To be completed with the final test result and demonstration notes._
 1. Json format require "_" between words in JSON exposed variables, I assumed that was the format requirement, generally I would use camel case.
 2. Rejected status was required and it would return the request values.
 3. Amount value can be negative, as there was no clear requirement about that I did not add any validations, intuitively I would not accept negative values and do this kind of operations in a separated method as rules and requirements might differ.
-4. 
+4. Authentication was not done but it would be a critical requirement to have some kind of validation related to it
 <!-- Complete this section at the end of the exercise. Focus on what changed between the
 initial architecture and final implementation. -->
 

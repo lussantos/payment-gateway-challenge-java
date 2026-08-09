@@ -2,6 +2,7 @@ package com.checkout.payment.gateway.model.dto;
 
 import com.checkout.payment.gateway.common.StringUtil;
 import com.checkout.payment.gateway.enums.PaymentStatus;
+import com.checkout.payment.gateway.model.Payment;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -38,13 +39,14 @@ public class PostPaymentResponse {
 
   private BigInteger amount;
 
-  public static PostPaymentResponse from(PostPaymentRequest paymentRequest) {
+  public static PostPaymentResponse from(Payment payment, String decryptedCardNumber) {
     return new PostPaymentResponse()
-        .setId(UUID.randomUUID())
-        .setCardNumberLastFour(StringUtil.getLastFourDigits(paymentRequest.getCardNumber()))
-        .setExpiryMonth(paymentRequest.getExpiryMonth())
-        .setExpiryYear(paymentRequest.getExpiryYear())
-        .setCurrency(Currency.getInstance(paymentRequest.getCurrency()))
-        .setAmount(paymentRequest.getAmount());
+        .setId(payment.getId())
+        .setStatus(payment.getStatus())
+        .setCardNumberLastFour(StringUtil.getLastFourDigits(decryptedCardNumber))
+        .setExpiryMonth(payment.getExpiryMonth())
+        .setExpiryYear(payment.getExpiryYear())
+        .setCurrency(Currency.getInstance(payment.getCurrency()))
+        .setAmount(payment.getAmount());
   }
 }

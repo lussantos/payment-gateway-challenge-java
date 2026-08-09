@@ -3,6 +3,7 @@ package com.checkout.payment.gateway.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mockStatic;
@@ -14,10 +15,12 @@ import com.checkout.payment.gateway.enums.PaymentStatus;
 import com.checkout.payment.gateway.exception.BankIntegrationException;
 import com.checkout.payment.gateway.exception.EventProcessingException;
 import com.checkout.payment.gateway.exception.InvalidPaymentRequestException;
+import com.checkout.payment.gateway.model.Payment;
 import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
 import com.checkout.payment.gateway.model.dto.PostPaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
 import java.math.BigInteger;
+import java.time.Instant;
 import java.util.Currency;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,6 +40,13 @@ class PaymentGatewayServiceTest {
 
   private static final UUID PAYMENT_ID =
       UUID.fromString("83173e49-4c3f-4952-9df4-1b2d675a5ba5");
+  private static final UUID AUTHORIZATION_CODE =
+      UUID.fromString("99b8d797-4456-42b4-9b1f-21499d6aaf46");
+  private static final Instant PAYMENT_TIME = Instant.parse("2026-08-09T10:15:30Z");
+  private static final String CARD_NUMBER = "2222405343248877";
+  private static final String CVV = "123";
+  private static final String ENCRYPTED_CARD_NUMBER = "encrypted-card-number";
+  private static final String ENCRYPTED_CVV = "encrypted-cvv";
 
   @Mock
   private PaymentsRepository paymentsRepository;
@@ -47,17 +57,22 @@ class PaymentGatewayServiceTest {
   @Mock
   private CurrencyValidationService currencyValidationService;
 
+  @Mock
+  private PaymentEncryptionService paymentEncryptionService;
+
   @InjectMocks
   private PaymentGatewayService paymentGatewayService;
 
   @Test
   void returnsPaymentWhenItExists() {
-    PostPaymentResponse expectedPayment = getPaymentResponse(PAYMENT_ID);
-    when(paymentsRepository.get(PAYMENT_ID)).thenReturn(Optional.of(expectedPayment));
+    Payment storedPayment = getPayment(PaymentStatus.AUTHORIZED);
+    PostPaymentResponse expectedResponse = getPaymentResponse(PaymentStatus.AUTHORIZED);
+    when(paymentsRepository.get(PAYMENT_ID)).thenReturn(Optional.of(storedPayment));
+    when(paymentEncryptionService.decrypt(ENCRYPTED_CARD_NUMBER)).thenReturn(CARD_NUMBER);
 
-    PostPaymentResponse payment = paymentGatewayService.getPaymentById(PAYMENT_ID);
+    PostPaymentResponse response = paymentGatewayService.getPaymentById(PAYMENT_ID);
 
-    assertSame(expectedPayment, payment);
+    assertEquals(expectedResponse, response);
   }
 
   @Test
@@ -75,16 +90,22 @@ class PaymentGatewayServiceTest {
   @MethodSource("bankDecisions")
   void processesBankDecision(boolean authorized, PaymentStatus expectedStatus) {
     PostPaymentRequest paymentRequest = getPaymentRequest();
-    PostPaymentResponse expectedResponse = getPaymentResponse(PAYMENT_ID).setStatus(expectedStatus);
+    Payment expectedPayment = getPayment(expectedStatus);
+    PostPaymentResponse expectedResponse = getPaymentResponse(expectedStatus);
     BankPaymentResponse bankResponse = new BankPaymentResponse(
-        authorized, authorized ? "authorization-code" : null);
+        authorized, AUTHORIZATION_CODE.toString());
 
     doNothing().when(currencyValidationService).validate(paymentRequest.getCurrency());
     when(bankSimulatorService.getBankResponse(paymentRequest)).thenReturn(bankResponse);
-    doNothing().when(paymentsRepository).add(expectedResponse);
+    when(paymentEncryptionService.encrypt(CARD_NUMBER)).thenReturn(ENCRYPTED_CARD_NUMBER);
+    when(paymentEncryptionService.encrypt(CVV)).thenReturn(ENCRYPTED_CVV);
+    when(paymentEncryptionService.decrypt(ENCRYPTED_CARD_NUMBER)).thenReturn(CARD_NUMBER);
+    doNothing().when(paymentsRepository).add(expectedPayment);
 
-    try (MockedStatic<UUID> uuid = mockStatic(UUID.class)) {
+    try (MockedStatic<UUID> uuid = mockStatic(UUID.class, CALLS_REAL_METHODS);
+        MockedStatic<Instant> instant = mockStatic(Instant.class, CALLS_REAL_METHODS)) {
       uuid.when(UUID::randomUUID).thenReturn(PAYMENT_ID);
+      instant.when(Instant::now).thenReturn(PAYMENT_TIME);
 
       PostPaymentResponse response = paymentGatewayService.processPayment(paymentRequest);
 
@@ -105,7 +126,8 @@ class PaymentGatewayServiceTest {
         () -> paymentGatewayService.processPayment(paymentRequest));
 
     assertSame(expectedException, exception);
-    verifyNoInteractions(bankSimulatorService, paymentsRepository);
+    verifyNoInteractions(
+        bankSimulatorService, paymentEncryptionService, paymentsRepository);
   }
 
   @Test
@@ -120,7 +142,8 @@ class PaymentGatewayServiceTest {
 
     assertEquals("Expiry date must be in the future", exception.getMessage());
     verifyNoInteractions(
-        currencyValidationService, bankSimulatorService, paymentsRepository);
+        currencyValidationService, bankSimulatorService, paymentEncryptionService,
+        paymentsRepository);
   }
 
   @Test
@@ -136,7 +159,7 @@ class PaymentGatewayServiceTest {
         () -> paymentGatewayService.processPayment(paymentRequest));
 
     assertSame(expectedException, exception);
-    verifyNoInteractions(paymentsRepository);
+    verifyNoInteractions(paymentEncryptionService, paymentsRepository);
   }
 
   private static Stream<Arguments> bankDecisions() {
@@ -147,18 +170,33 @@ class PaymentGatewayServiceTest {
 
   private static PostPaymentRequest getPaymentRequest() {
     return new PostPaymentRequest()
-        .setCardNumber("2222405343248877")
+        .setCardNumber(CARD_NUMBER)
         .setExpiryMonth(4)
         .setExpiryYear(2099)
         .setCurrency("GBP")
         .setAmount(BigInteger.valueOf(100))
-        .setCvv("123");
+        .setCvv(CVV);
   }
 
-  private static PostPaymentResponse getPaymentResponse(UUID id) {
+  private static Payment getPayment(PaymentStatus status) {
+    return new Payment()
+        .setId(PAYMENT_ID)
+        .setStatus(status)
+        .setCardNumber(ENCRYPTED_CARD_NUMBER)
+        .setExpiryMonth(4)
+        .setExpiryYear(2099)
+        .setCurrency("GBP")
+        .setAmount(BigInteger.valueOf(100))
+        .setCvv(ENCRYPTED_CVV)
+        .setAuthorizationCode(status == PaymentStatus.AUTHORIZED ? AUTHORIZATION_CODE : null)
+        .setCreated(PAYMENT_TIME)
+        .setUpdated(PAYMENT_TIME);
+  }
+
+  private static PostPaymentResponse getPaymentResponse(PaymentStatus status) {
     return new PostPaymentResponse()
-        .setId(id)
-        .setStatus(PaymentStatus.AUTHORIZED)
+        .setId(PAYMENT_ID)
+        .setStatus(status)
         .setCardNumberLastFour("8877")
         .setExpiryMonth(4)
         .setExpiryYear(2099)

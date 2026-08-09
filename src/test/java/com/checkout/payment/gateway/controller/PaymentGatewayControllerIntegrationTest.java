@@ -2,6 +2,7 @@ package com.checkout.payment.gateway.controller;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,9 +12,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.checkout.payment.gateway.client.BankSimulatorClient;
 import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
 import com.checkout.payment.gateway.enums.PaymentStatus;
+import com.checkout.payment.gateway.model.Payment;
 import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
 import com.checkout.payment.gateway.model.dto.PostPaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
+import com.checkout.payment.gateway.service.PaymentEncryptionService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.UnsupportedEncodingException;
@@ -42,31 +45,38 @@ class PaymentGatewayControllerIntegrationTest {
   PaymentsRepository paymentsRepository;
   @Autowired
   private ObjectMapper objectMapper;
+  @Autowired
+  private PaymentEncryptionService paymentEncryptionService;
   @MockBean
   BankSimulatorClient bankSimulatorClient;
 
   @Test
   void whenPaymentWithIdExistThenCorrectPaymentIsReturned() throws Exception {
-    PostPaymentResponse payment = getPaymentResponse();
+    Payment payment = getStoredPayment();
+    PostPaymentResponse expectedResponse = getPaymentResponse(payment);
 
     paymentsRepository.add(payment);
 
     MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/payment/" + payment.getId()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.status").value(payment.getStatus().getName()))
-        .andExpect(jsonPath("$.card_number_last_four").value(payment.getCardNumberLastFour()))
-        .andExpect(jsonPath("$.expiry_month").value(payment.getExpiryMonth()))
-        .andExpect(jsonPath("$.expiry_year").value(payment.getExpiryYear()))
-        .andExpect(jsonPath("$.currency").value(payment.getCurrency().getCurrencyCode()))
-        .andExpect(jsonPath("$.amount").value(payment.getAmount().intValueExact())).andReturn();
+        .andExpect(jsonPath("$.status").value(expectedResponse.getStatus().getName()))
+        .andExpect(jsonPath("$.card_number_last_four")
+            .value(expectedResponse.getCardNumberLastFour()))
+        .andExpect(jsonPath("$.expiry_month").value(expectedResponse.getExpiryMonth()))
+        .andExpect(jsonPath("$.expiry_year").value(expectedResponse.getExpiryYear()))
+        .andExpect(jsonPath("$.currency")
+            .value(expectedResponse.getCurrency().getCurrencyCode()))
+        .andExpect(jsonPath("$.amount").value(expectedResponse.getAmount().intValueExact()))
+        .andReturn();
 
-    assertEquals(payment, convertResultToObject(result));
+    assertEquals(expectedResponse, convertResultToObject(result));
   }
 
   @Test
   void whenPaymentProcessingIsSucceededThenSuccessfulResponseIsReturned() throws Exception {
     PostPaymentRequest payment = getPaymentRequest(Currency.getInstance("USD"));
-    BankPaymentResponse bankResponse = new BankPaymentResponse(true, "authorization-code");
+    BankPaymentResponse bankResponse = new BankPaymentResponse(
+        true, "99b8d797-4456-42b4-9b1f-21499d6aaf46");
     when(bankSimulatorClient.processPayment(payment)).thenReturn(bankResponse);
 
     MvcResult result = mvc.perform(MockMvcRequestBuilders.post("/payment")
@@ -82,16 +92,16 @@ class PaymentGatewayControllerIntegrationTest {
         .andReturn();
 
     PostPaymentResponse response = convertResultToObject(result);
-    PostPaymentResponse expectedResponse = new PostPaymentResponse()
-        .setId(response.getId())
-        .setStatus(PaymentStatus.AUTHORIZED)
-        .setCardNumberLastFour("8877")
-        .setExpiryMonth(payment.getExpiryMonth())
-        .setExpiryYear(payment.getExpiryYear())
-        .setCurrency(Currency.getInstance(payment.getCurrency()))
-        .setAmount(payment.getAmount());
+    Payment storedPayment = paymentsRepository.get(response.getId()).orElseThrow();
+    PostPaymentResponse expectedResponse = getPaymentResponse(storedPayment);
 
     assertEquals(expectedResponse, response);
+
+    assertNotEquals(payment.getCardNumber(), storedPayment.getCardNumber());
+    assertNotEquals(payment.getCvv(), storedPayment.getCvv());
+    assertEquals(
+        payment.getCardNumber(), paymentEncryptionService.decrypt(storedPayment.getCardNumber()));
+    assertEquals(payment.getCvv(), paymentEncryptionService.decrypt(storedPayment.getCvv()));
 
     MvcResult retrievalResult = mvc.perform(
             MockMvcRequestBuilders.get("/payment/" + response.getId()))
@@ -141,14 +151,21 @@ class PaymentGatewayControllerIntegrationTest {
         .setCvv("123");
   }
 
-  private static PostPaymentResponse getPaymentResponse() {
-    return new PostPaymentResponse().setId(ID)
-        .setAmount(BigInteger.valueOf(10))
-        .setCurrency(Currency.getInstance("USD"))
+  private PostPaymentResponse getPaymentResponse(Payment payment) {
+    String cardNumber = paymentEncryptionService.decrypt(payment.getCardNumber());
+    return PostPaymentResponse.from(payment, cardNumber);
+  }
+
+  private Payment getStoredPayment() {
+    return new Payment()
+        .setId(ID)
         .setStatus(PaymentStatus.AUTHORIZED)
+        .setCardNumber(paymentEncryptionService.encrypt("2222405343244321"))
         .setExpiryMonth(12)
         .setExpiryYear(2024)
-        .setCardNumberLastFour("4321");
+        .setCurrency("USD")
+        .setAmount(BigInteger.valueOf(10))
+        .setCvv(paymentEncryptionService.encrypt("123"));
   }
 
   private PostPaymentResponse convertResultToObject(MvcResult result)

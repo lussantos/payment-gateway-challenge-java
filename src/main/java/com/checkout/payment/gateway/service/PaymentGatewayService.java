@@ -1,10 +1,10 @@
 package com.checkout.payment.gateway.service;
 
 import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
-import com.checkout.payment.gateway.common.StringUtil;
 import com.checkout.payment.gateway.enums.PaymentStatus;
 import com.checkout.payment.gateway.exception.EventProcessingException;
 import com.checkout.payment.gateway.exception.InvalidPaymentRequestException;
+import com.checkout.payment.gateway.model.Payment;
 import com.checkout.payment.gateway.model.dto.PostPaymentRequest;
 import com.checkout.payment.gateway.model.dto.PostPaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
@@ -24,10 +24,13 @@ public class PaymentGatewayService {
   private final PaymentsRepository paymentsRepository;
   private final BankSimulatorService bankSimulatorService;
   private final CurrencyValidationService currencyValidationService;
+  private final PaymentEncryptionService paymentEncryptionService;
 
   public PostPaymentResponse getPaymentById(UUID id) {
     LOG.debug("Requesting access to to payment with ID {}", id);
-    return paymentsRepository.get(id).orElseThrow(() -> new EventProcessingException("Invalid ID"));
+    Payment payment = paymentsRepository.get(id)
+        .orElseThrow(() -> new EventProcessingException("Invalid ID"));
+    return mapPaymentResponse(payment);
   }
 
   public PostPaymentResponse processPayment(PostPaymentRequest paymentRequest) {
@@ -35,10 +38,22 @@ public class PaymentGatewayService {
     validateExpiryDate(paymentRequest);
     currencyValidationService.validate(paymentRequest.getCurrency());
     BankPaymentResponse bankResponse = bankSimulatorService.getBankResponse(paymentRequest);
-    PostPaymentResponse postPaymentResponse = mapPaymentResponse(paymentRequest);
-    validateBankResponseAndSetStatus(postPaymentResponse, bankResponse);
-    paymentsRepository.add(postPaymentResponse);
-    return postPaymentResponse;
+    Payment payment = mapAndPersistPayment(paymentRequest, bankResponse);
+    return mapPaymentResponse(payment);
+  }
+
+  private Payment mapAndPersistPayment(PostPaymentRequest paymentRequest, BankPaymentResponse bankResponse) {
+    Payment payment = Payment.from(paymentRequest);
+    applyBankResponse(payment, bankResponse);
+    encryptSensitiveData(payment);
+    paymentsRepository.add(payment);
+    return payment;
+  }
+
+  private void encryptSensitiveData(Payment payment) {
+    payment
+        .setCardNumber(paymentEncryptionService.encrypt(payment.getCardNumber()))
+        .setCvv(paymentEncryptionService.encrypt(payment.getCvv()));
   }
 
   private void validateExpiryDate(PostPaymentRequest paymentRequest) {
@@ -50,20 +65,20 @@ public class PaymentGatewayService {
     }
   }
 
-  private PostPaymentResponse mapPaymentResponse(PostPaymentRequest paymentRequest) {
-    PostPaymentResponse postPaymentResponse = PostPaymentResponse.from(paymentRequest);
-    postPaymentResponse.setCardNumberLastFour(
-        StringUtil.getLastFourDigits(paymentRequest.getCardNumber()));
-    postPaymentResponse.setId(UUID.randomUUID());
-    return postPaymentResponse;
-  }
-
-  private void validateBankResponseAndSetStatus(PostPaymentResponse postPaymentResponse,
+  private void applyBankResponse(Payment payment,
       BankPaymentResponse bankResponse) {
     if (bankResponse.authorized()) {
-      postPaymentResponse.setStatus(PaymentStatus.AUTHORIZED);
+      payment.setStatus(PaymentStatus.AUTHORIZED);
+      if (bankResponse.authorizationCode() != null) {
+        payment.setAuthorizationCode(UUID.fromString(bankResponse.authorizationCode()));
+      }
     } else {
-      postPaymentResponse.setStatus(PaymentStatus.DECLINED);
+      payment.setStatus(PaymentStatus.DECLINED);
     }
+  }
+
+  private PostPaymentResponse mapPaymentResponse(Payment payment) {
+    String cardNumber = paymentEncryptionService.decrypt(payment.getCardNumber());
+    return PostPaymentResponse.from(payment, cardNumber);
   }
 }
