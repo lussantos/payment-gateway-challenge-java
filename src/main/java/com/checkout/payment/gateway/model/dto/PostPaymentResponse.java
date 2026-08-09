@@ -1,5 +1,6 @@
 package com.checkout.payment.gateway.model.dto;
 
+import com.checkout.payment.gateway.common.StringUtil;
 import com.checkout.payment.gateway.enums.PaymentStatus;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.EqualsAndHashCode;
@@ -25,7 +26,7 @@ public class PostPaymentResponse {
   private PaymentStatus status;
 
   @JsonProperty("card_number_last_four")
-  private Integer cardNumberLastFour;
+  private String cardNumberLastFour;
 
   @JsonProperty("expiry_month")
   private Integer expiryMonth;
@@ -37,4 +38,13 @@ public class PostPaymentResponse {
 
   private BigInteger amount;
 
+  public static PostPaymentResponse from(PostPaymentRequest paymentRequest) {
+    return new PostPaymentResponse()
+        .setId(UUID.randomUUID())
+        .setCardNumberLastFour(StringUtil.getLastFourDigits(paymentRequest.getCardNumber()))
+        .setExpiryMonth(paymentRequest.getExpiryMonth())
+        .setExpiryYear(paymentRequest.getExpiryYear())
+        .setCurrency(Currency.getInstance(paymentRequest.getCurrency()))
+        .setAmount(paymentRequest.getAmount());
+  }
 }

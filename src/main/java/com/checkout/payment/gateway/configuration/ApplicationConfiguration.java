@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 
 @Configuration
-@EnableConfigurationProperties(PaymentProperties.class)
+@EnableConfigurationProperties({PaymentProperties.class, BankSimulatorProperties.class})
 public class ApplicationConfiguration {
 
   @Bean

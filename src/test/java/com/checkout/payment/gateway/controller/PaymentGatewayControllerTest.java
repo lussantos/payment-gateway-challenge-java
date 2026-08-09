@@ -54,7 +54,8 @@ class PaymentGatewayControllerTest {
                 .content(request)).andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.status").value(PaymentStatus.REJECTED.getName())).andReturn();
 
-    PostPaymentErrorResponse response = objectMapper.readValue(result.getResponse().getContentAsString(), PostPaymentErrorResponse.class);
+    PostPaymentErrorResponse response = objectMapper.readValue(
+        result.getResponse().getContentAsString(), PostPaymentErrorResponse.class);
     requiredErrorMessages.forEach(
         requiredMessage -> assertTrue(response.getErrorMessage().contains(requiredMessage),
             () -> "Expected error message to contain: " + requiredMessage));
@@ -64,35 +65,33 @@ class PaymentGatewayControllerTest {
 
   private static Stream<Arguments> invalidPaymentRequests() {
     return Stream.of(Arguments.of("""
-        {
-          "card_number": "2222405343248877",
-          "expiry_month": 12,
-          "expiry_year": 2099,
-          "currency": "GBP",
-          "amount": 0.5,
-          "cvv": "123"
-        }
-        """, List.of("Payment request body is malformed")), Arguments.of("{}",
-        List.of("Card number is required", "Expiry month is required", "Expiry year is required",
-            "Currency is required", "Amount is required", "CVV is required")), Arguments.of("""
-        {
-          "card_number": "2222405343248877",
-          "expiry_month": 1,
-          "expiry_year": 2020,
-          "currency": "GBP",
-          "amount": 100,
-          "cvv": "123"
-        }
-        """, List.of("Expiry date must be in the future")), Arguments.of("""
-        {
-          "card_number": "1234",
-          "expiry_month": 13,
-          "expiry_year": 2020,
-          "currency": "JPY",
-          "amount": 100,
-          "cvv": "12"
-        }
-        """, List.of("Card number", "Expiry month", "CVV")));
+            {
+              "card_number": "2222405343248877",
+              "expiry_month": 12,
+              "expiry_year": 2099,
+              "currency": "GBP",
+              "amount": 0.5,
+              "cvv": "123"
+            }
+            """, List.of("Payment request body is malformed")),
+        Arguments.of("{}",
+            List.of("Card number is required", "Expiry month is required",
+                "Expiry year is required",
+                "Currency is required", "Amount is required", "CVV is required")),
+        Arguments.of("""
+            {
+              "card_number": "1234",
+              "expiry_month": 13,
+              "expiry_year": 999,
+              "currency": "JPY",
+              "amount": 100,
+              "cvv": "12"
+            }
+            """, List.of(
+            "Card number must contain between 14 and 19 digits",
+            "Expiry year must have at least 4 digits.",
+            "Expiry month value must be from 1 to 12",
+            "CVV must contain 3 or 4 digits")));
   }
 
 }

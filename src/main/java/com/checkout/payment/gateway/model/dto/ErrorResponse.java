@@ -10,10 +10,4 @@ public class ErrorResponse {
     this.message = message;
   }
 
-  @Override
-  public String toString() {
-    return "ErrorResponse{" +
-        "message='" + message + '\'' +
-        '}';
-  }
 }

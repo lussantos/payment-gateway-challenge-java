@@ -24,3 +24,17 @@ will be updated as the final solution takes shape.
 - Introduce load balancing.
 - Run performance tests and identify potential improvements.
 - Create a performance improvement plan based on the test results.
+
+# Tests Architecture
+
+## Integration Controller test
+
+Tests meant to validate the whole flow in the whole chain of the code, no mocking used, just a Spring boot run to test how each requests works
+
+## Contract Controller test
+
+Tests meant to be used to validate contract errors and validations, does not need any database/repository integration, meant to test unsuccessful contract cases.
+
+## Class unit tests
+
+Uses Mocks and validate the isolated class logic, uses mockito to mock target classes.

@@ -10,12 +10,17 @@ import org.junit.jupiter.api.Test;
 
 class CurrencyValidationServiceTest {
 
-  @Test
-  void validatesAgainstTheConfiguredCurrencies() {
-    CurrencyValidationService service = new CurrencyValidationService(
-        new PaymentProperties(Set.of("JPY")));
+  CurrencyValidationService service = new CurrencyValidationService(
+      new PaymentProperties(Set.of("JPY")));
 
+  @Test
+  void whenCurrencyIsSupportedDoNothing() {
     assertDoesNotThrow(() -> service.validate("JPY"));
+  }
+
+  @Test
+  void whenCurrencyIsNotSupportedThrowException() {
     assertThrows(InvalidPaymentRequestException.class, () -> service.validate("USD"));
   }
+
 }

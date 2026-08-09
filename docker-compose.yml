@@ -18,5 +18,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - bank_simulator
+    environment:
+      BANK_SIMULATOR_PAYMENTS_URL: http://localhost:8080/payments
     ports:
       - "8090:8090"

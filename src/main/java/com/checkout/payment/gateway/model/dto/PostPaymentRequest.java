@@ -1,8 +1,6 @@
 package com.checkout.payment.gateway.model.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -10,7 +8,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import java.io.Serializable;
 import java.math.BigInteger;
-import java.time.YearMonth;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -36,6 +33,7 @@ public class PostPaymentRequest implements Serializable {
 
   @JsonProperty("expiry_year")
   @NotNull(message = "Expiry year is required")
+  @Min(value = 1000, message = "Expiry year must have at least 4 digits.")
   private Integer expiryYear;
 
   @NotBlank(message = "Currency is required")
@@ -48,20 +46,5 @@ public class PostPaymentRequest implements Serializable {
   @NotBlank(message = "CVV is required")
   @Pattern(regexp = "\\d{3,4}", message = "CVV must contain 3 or 4 digits")
   private String cvv;
-
-  @JsonIgnore
-  @AssertTrue(message = "Expiry date must be in the future")
-  public boolean isExpiryDateInFuture() {
-    if (expiryMonth == null || expiryYear == null || expiryMonth < 1 || expiryMonth > 12) {
-      return true;
-    }
-    //TODO ideally date reference should have specific logic to consider request location in a distributed env
-    return YearMonth.of(expiryYear, expiryMonth).isAfter(YearMonth.now());
-  }
-
-  @JsonProperty("expiry_date")
-  public String getExpiryDate() {
-    return String.format("%d/%d", expiryMonth, expiryYear);
-  }
 
 }
