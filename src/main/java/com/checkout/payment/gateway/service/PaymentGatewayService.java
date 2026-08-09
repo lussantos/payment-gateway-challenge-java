@@ -31,7 +31,7 @@ public class PaymentGatewayService {
 
   public PaymentResponse getPaymentById(UUID id) {
     LOG.debug("Requesting access to to payment with ID {}", id);
-    Payment payment = paymentsRepository.get(id)
+    Payment payment = paymentsRepository.findById(id)
         .orElseThrow(() -> new EventProcessingException("Invalid ID"));
     return mapPaymentResponse(payment);
   }
@@ -54,10 +54,10 @@ public class PaymentGatewayService {
   private Payment mapAndPersistPayment(PaymentRequest paymentRequest, BankPaymentResponse bankResponse) {
     Payment payment = Payment.from(paymentRequest)
         .setId(UUID.randomUUID())
-        .setCreated(Instant.now());
+        .setCreatedAt(Instant.now());
     applyBankResponse(payment, bankResponse);
     encryptSensitiveData(payment);
-    paymentsRepository.add(payment);
+    paymentsRepository.save(payment);
     return payment;
   }
 

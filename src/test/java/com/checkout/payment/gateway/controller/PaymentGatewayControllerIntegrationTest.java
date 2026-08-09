@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
+import java.time.Instant;
 import java.util.Currency;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -56,9 +57,9 @@ class PaymentGatewayControllerIntegrationTest {
     Payment payment = getStoredPayment();
     PaymentResponse expectedResponse = getPaymentResponse(payment);
 
-    paymentsRepository.add(payment);
+    paymentsRepository.save(payment);
 
-    MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/payment/" + payment.getId()))
+    MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/payments/" + payment.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value(expectedResponse.getStatus().getName()))
         .andExpect(jsonPath("$.card_number_last_four")
@@ -80,7 +81,7 @@ class PaymentGatewayControllerIntegrationTest {
         true, "99b8d797-4456-42b4-9b1f-21499d6aaf46");
     when(bankSimulatorClient.processPayment(payment)).thenReturn(bankResponse);
 
-    MvcResult result = mvc.perform(MockMvcRequestBuilders.post("/payment")
+    MvcResult result = mvc.perform(MockMvcRequestBuilders.post("/payments")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(payment)))
         .andExpect(status().isCreated())
@@ -93,7 +94,7 @@ class PaymentGatewayControllerIntegrationTest {
         .andReturn();
 
     PaymentResponse response = convertResultToObject(result);
-    Payment storedPayment = paymentsRepository.get(response.getId()).orElseThrow();
+    Payment storedPayment = paymentsRepository.findById(response.getId()).orElseThrow();
     PaymentResponse expectedResponse = getPaymentResponse(storedPayment);
 
     assertEquals(expectedResponse, response);
@@ -105,7 +106,7 @@ class PaymentGatewayControllerIntegrationTest {
     assertEquals(payment.getCvv(), paymentEncryptionService.decrypt(storedPayment.getCvv()));
 
     MvcResult retrievalResult = mvc.perform(
-            MockMvcRequestBuilders.get("/payment/" + response.getId()))
+            MockMvcRequestBuilders.get("/payments/" + response.getId()))
         .andExpect(status().isOk())
         .andReturn();
 
@@ -118,7 +119,7 @@ class PaymentGatewayControllerIntegrationTest {
         .setExpiryMonth(1)
         .setExpiryYear(2020);
 
-    mvc.perform(MockMvcRequestBuilders.post("/payment")
+    mvc.perform(MockMvcRequestBuilders.post("/payments")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(expiredPayment)))
         .andExpect(status().isBadRequest())
@@ -134,7 +135,7 @@ class PaymentGatewayControllerIntegrationTest {
   void whenCurrencyIsNotSupportedThenItIsRejectedByTheService() throws Exception {
     PaymentRequest paymentRequestWithUnsupportedCurrency = getPaymentRequest(
         Currency.getInstance("JPY"));
-    mvc.perform(MockMvcRequestBuilders.post("/payment")
+    mvc.perform(MockMvcRequestBuilders.post("/payments")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(paymentRequestWithUnsupportedCurrency)))
         .andExpect(status().isBadRequest())
@@ -151,7 +152,7 @@ class PaymentGatewayControllerIntegrationTest {
         .setExpiryMonth(1)
         .setExpiryYear(2020);
 
-    mvc.perform(MockMvcRequestBuilders.post("/payment")
+    mvc.perform(MockMvcRequestBuilders.post("/payments")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(invalidPayment)))
         .andExpect(status().isBadRequest())
@@ -190,7 +191,8 @@ class PaymentGatewayControllerIntegrationTest {
         .setExpiryYear(2024)
         .setCurrency("USD")
         .setAmount(BigInteger.valueOf(10))
-        .setCvv(paymentEncryptionService.encrypt("123"));
+        .setCvv(paymentEncryptionService.encrypt("123"))
+        .setCreatedAt(Instant.parse("2026-08-09T10:15:30Z"));
   }
 
   private PaymentResponse convertResultToObject(MvcResult result)

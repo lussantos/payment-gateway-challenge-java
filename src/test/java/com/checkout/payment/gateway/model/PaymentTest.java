@@ -30,6 +30,6 @@ class PaymentTest {
         () -> assertEquals(request.getCurrency(), payment.getCurrency()),
         () -> assertEquals(request.getAmount(), payment.getAmount()),
         () -> assertEquals(request.getCvv(), payment.getCvv()),
-        () -> assertNull(payment.getCreated()));
+        () -> assertNull(payment.getCreatedAt()));
   }
 }

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -69,7 +68,7 @@ class PaymentGatewayServiceTest {
   void returnsPaymentWhenItExists() {
     Payment storedPayment = getPayment(PaymentStatus.AUTHORIZED);
     PaymentResponse expectedResponse = getPaymentResponse(PaymentStatus.AUTHORIZED);
-    when(paymentsRepository.get(PAYMENT_ID)).thenReturn(Optional.of(storedPayment));
+    when(paymentsRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(storedPayment));
     when(paymentEncryptionService.decrypt(ENCRYPTED_CARD_NUMBER)).thenReturn(CARD_NUMBER);
 
     PaymentResponse response = paymentGatewayService.getPaymentById(PAYMENT_ID);
@@ -79,7 +78,7 @@ class PaymentGatewayServiceTest {
 
   @Test
   void rejectsPaymentIdWhenItDoesNotExist() {
-    when(paymentsRepository.get(PAYMENT_ID)).thenReturn(Optional.empty());
+    when(paymentsRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
 
     EventProcessingException exception = assertThrows(
         EventProcessingException.class,
@@ -102,7 +101,7 @@ class PaymentGatewayServiceTest {
     when(paymentEncryptionService.encrypt(CARD_NUMBER)).thenReturn(ENCRYPTED_CARD_NUMBER);
     when(paymentEncryptionService.encrypt(CVV)).thenReturn(ENCRYPTED_CVV);
     when(paymentEncryptionService.decrypt(ENCRYPTED_CARD_NUMBER)).thenReturn(CARD_NUMBER);
-    doNothing().when(paymentsRepository).add(expectedPayment);
+    when(paymentsRepository.save(expectedPayment)).thenReturn(expectedPayment);
 
     try (MockedStatic<UUID> uuid = mockStatic(UUID.class, CALLS_REAL_METHODS);
         MockedStatic<Instant> instant = mockStatic(Instant.class, CALLS_REAL_METHODS)) {
@@ -181,7 +180,7 @@ class PaymentGatewayServiceTest {
         .setAmount(BigInteger.valueOf(100))
         .setCvv(ENCRYPTED_CVV)
         .setAuthorizationCode(status == PaymentStatus.AUTHORIZED ? AUTHORIZATION_CODE : null)
-        .setCreated(PAYMENT_TIME);
+        .setCreatedAt(PAYMENT_TIME);
   }
 
   private static PaymentResponse getPaymentResponse(PaymentStatus status) {
