@@ -1,31 +1,132 @@
 package com.checkout.payment.gateway.service;
 
+import com.checkout.payment.gateway.client.dto.BankPaymentResponse;
+import com.checkout.payment.gateway.enums.PaymentStatus;
 import com.checkout.payment.gateway.exception.EventProcessingException;
-import com.checkout.payment.gateway.model.PostPaymentRequest;
-import com.checkout.payment.gateway.model.PostPaymentResponse;
+import com.checkout.payment.gateway.exception.IdempotencyConflictException;
+import com.checkout.payment.gateway.model.IdempotencyRecord;
+import com.checkout.payment.gateway.exception.PaymentValidationError;
+import com.checkout.payment.gateway.exception.PaymentValidationException;
+import com.checkout.payment.gateway.model.Payment;
+import com.checkout.payment.gateway.model.dto.PaymentRequest;
+import com.checkout.payment.gateway.model.dto.PaymentResponse;
 import com.checkout.payment.gateway.repository.PaymentsRepository;
+import com.checkout.payment.gateway.repository.IdempotencyRecordRepository;
+import com.checkout.payment.gateway.validator.PaymentValidator;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class PaymentGatewayService {
 
   private static final Logger LOG = LoggerFactory.getLogger(PaymentGatewayService.class);
 
   private final PaymentsRepository paymentsRepository;
+  private final BankSimulatorService bankSimulatorService;
+  private final PaymentEncryptionService paymentEncryptionService;
+  private final PaymentValidator paymentValidator;
+  private final IdempotencyRecordRepository idempotencyRecordRepository;
+  private final IdempotencyRecordCreator idempotencyRecordCreator;
+  private final PaymentRequestFingerprint paymentRequestFingerprint;
 
-  public PaymentGatewayService(PaymentsRepository paymentsRepository) {
-    this.paymentsRepository = paymentsRepository;
-  }
-
-  public PostPaymentResponse getPaymentById(UUID id) {
+  public PaymentResponse getPaymentById(UUID id) {
     LOG.debug("Requesting access to to payment with ID {}", id);
-    return paymentsRepository.get(id).orElseThrow(() -> new EventProcessingException("Invalid ID"));
+    Payment payment = paymentsRepository.findById(id)
+        .orElseThrow(() -> new EventProcessingException("Invalid ID"));
+    return mapPaymentResponse(payment);
   }
 
-  public UUID processPayment(PostPaymentRequest paymentRequest) {
-    return UUID.randomUUID();
+  @Transactional
+  public PaymentResponse processPayment(String idempotencyKey, PaymentRequest paymentRequest) {
+    validatePaymentRequest(idempotencyKey, paymentRequest);
+    LOG.debug("Requesting payment processing with idempotency key {}", idempotencyKey);
+
+    IdempotencyAttempt idempotency = resolveIdempotency(idempotencyKey, paymentRequest);
+    if (idempotency.replayResponse().isPresent()) {
+      return idempotency.replayResponse().get();
+    }
+
+    BankPaymentResponse bankResponse = bankSimulatorService.processBankPayment(paymentRequest);
+    Payment payment = mapAndPersistPayment(paymentRequest, bankResponse);
+    idempotency.record().setPayment(payment);
+    idempotencyRecordRepository.save(idempotency.record());
+    return mapPaymentResponse(payment);
+  }
+
+  private IdempotencyAttempt resolveIdempotency(
+      String idempotencyKey, PaymentRequest paymentRequest) {
+    String requestHash = paymentRequestFingerprint.hash(paymentRequest);
+    createIdempotencyRecordIfAbsent(idempotencyKey, requestHash);
+    IdempotencyRecord existing = idempotencyRecordRepository.lockById(idempotencyKey);
+
+    if (!existing.getRequestHash().equals(requestHash)) {
+      throw new IdempotencyConflictException(
+          "Idempotency-Key has already been used with a different request");
+    }
+    Optional<PaymentResponse> replay = existing.getPayment() == null
+        ? Optional.empty()
+        : Optional.of(mapPaymentResponse(existing.getPayment()));
+    return new IdempotencyAttempt(existing, replay);
+  }
+
+  private void createIdempotencyRecordIfAbsent(String idempotencyKey, String requestHash) {
+    try {
+      idempotencyRecordCreator.create(idempotencyKey, requestHash);
+    } catch (DataIntegrityViolationException ignored) {
+      // A concurrent request already created the coordination row for this key.
+    }
+  }
+
+  private void validatePaymentRequest(String idempotencyKey, PaymentRequest paymentRequest) {
+    List<PaymentValidationError> errors = paymentValidator.validate(
+        idempotencyKey, paymentRequest);
+    if (!errors.isEmpty()) {
+      throw new PaymentValidationException(errors);
+    }
+  }
+
+  private Payment mapAndPersistPayment(PaymentRequest paymentRequest, BankPaymentResponse bankResponse) {
+    Payment payment = Payment.from(paymentRequest)
+        .setId(UUID.randomUUID())
+        .setCreatedAt(Instant.now());
+    applyBankResponse(payment, bankResponse);
+    encryptSensitiveData(payment);
+    return paymentsRepository.save(payment);
+  }
+
+  private void encryptSensitiveData(Payment payment) {
+    payment
+        .setCardNumber(paymentEncryptionService.encrypt(payment.getCardNumber()))
+        .setCvv(paymentEncryptionService.encrypt(payment.getCvv()));
+  }
+
+  private void applyBankResponse(Payment payment,
+      BankPaymentResponse bankResponse) {
+    if (bankResponse.authorized()) {
+      payment.setStatus(PaymentStatus.AUTHORIZED);
+      if (bankResponse.authorizationCode() != null) {
+        payment.setAuthorizationCode(UUID.fromString(bankResponse.authorizationCode()));
+      }
+    } else {
+      payment.setStatus(PaymentStatus.DECLINED);
+    }
+  }
+
+  private PaymentResponse mapPaymentResponse(Payment payment) {
+    String cardNumber = paymentEncryptionService.decrypt(payment.getCardNumber());
+    return PaymentResponse.from(payment, cardNumber);
+  }
+
+  private record IdempotencyAttempt(
+      IdempotencyRecord record, Optional<PaymentResponse> replayResponse) {
   }
 }
