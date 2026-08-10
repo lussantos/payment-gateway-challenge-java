@@ -8,22 +8,35 @@ This is the Java version of the Payment Gateway challenge. If you haven't alread
 
 ## Running the application
 
-### Docker Compose
+### Run the application locally
 
-The simplest option starts PostgreSQL, the bank simulator, and the payment gateway together:
+Make sure Docker is running, then from the project root:
 
 ```shell
-docker compose up --build
+./gradlew bootRun
 ```
 
-Wait until the `payment_gateway` service has started. The application is then available at
-`http://localhost:8090`, and Swagger UI is available at
+That is the only command needed. Spring Boot's Docker Compose support reads `docker-compose.yml`,
+starts PostgreSQL and the bank simulator, waits until they report healthy, and contributes the
+PostgreSQL connection details before the application context refreshes.
+
+The application is then available at `http://localhost:8090`, and Swagger UI at
 `http://localhost:8090/swagger-ui/index.html`.
 
-Run Compose in the background by adding `-d`:
+The backing services are stopped again when the application exits.
+
+### Docker Compose
+
+The gateway can also run as a container alongside its backing services, using the `gateway` profile:
 
 ```shell
-docker compose up --build -d
+docker compose --profile gateway up --build
+```
+
+Wait until the `payment_gateway` service has started. Run Compose in the background by adding `-d`:
+
+```shell
+docker compose --profile gateway up --build -d
 docker compose logs -f payment_gateway
 ```
 
@@ -37,27 +50,6 @@ To stop the services and remove the local database volume:
 
 ```shell
 docker compose down --volumes
-```
-
-### Run the application locally
-
-Start only PostgreSQL and the bank simulator in Docker:
-
-```shell
-docker compose up -d postgres bank_simulator
-```
-
-Then start Spring Boot from the project root:
-
-```shell
-./gradlew bootRun
-```
-
-The default local configuration connects to PostgreSQL on port `5432` and the bank simulator on
-port `8080`. Stop the Spring Boot process with `Ctrl+C`, then stop its supporting services with:
-
-```shell
-docker compose down
 ```
 
 ### Run the tests
@@ -134,10 +126,35 @@ curl -X POST http://localhost:8090/payments \
 ### Report 
 
 File that will describe steps done to complete the project
-File directory: [interview_report.md](docs/interview_report.md)
+File directory: [interview_report.md](docs/implementation_plan.md)
 
 ### Architecture
 
 Documentation that will describe the architecture and possible steps related to it.
 
 File directory: [interview_report.md](docs/architecture.md)
+
+
+## Final Reflection
+
+### Open questions
+
+1. There is a conflict into the definition of the requirements,  response from https://github.com/cko-recruitment/#processing-a-payment says possible status are `Authorized`, `Declined` but requirements https://github.com/cko-recruitment/#requirements and intial implementation states that there is an extra status. I will assume Rejected is an actual status and clarify it on the interview. Normal delivery flow I would have raised this question before implementing.
+
+### Assumptions
+
+1. Json format require "_" between words in JSON exposed variables, I assumed that was the format requirement, generally I would use camel case.
+2. Rejected status was required and it would return the request values.
+3. Authentication was not done, but it would be a critical requirement to have some kind of validation related to it
+4. Amount format follows the same pattern in both client and bank simulator as there is no specification about it
+<!-- Complete this section at the end of the exercise. Focus on what changed between the
+initial architecture and final implementation. -->
+
+### What would I do next in a production environment?
+
+1. Time reference needs to be centralized, in a distributed system time reference can change which can impact payments received from different countries, so time should be based on the location of the request and not internal application time.
+2. Transaction management should be more granular, with different states, right now it only process 1 transaction per idempotencyID, we could have more states (like FAILED, PROCESSING, SUCCEEDED ) 
+3. Kafka part was not done, but for metrics and data collection it would be good to have it.
+4. Performance improvements into client, client used to access simulator was too basic and it could have better traceability and performance improvements like configurable pool and recovery mechanism
+5. Test coverage could be better checked, overall I always recommend 100% coverage to be sure we have all the scenarios covered
+6. Performance tests are missing, I think that would be very important to understand the behaviour an track overall performance of the application under high load

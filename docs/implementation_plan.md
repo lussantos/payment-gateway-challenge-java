@@ -180,33 +180,3 @@ the original requirements and prepare the following demonstration:
 
 _To be completed with the final test result and demonstration notes._
 
-## Final Reflection
-
-### Open questions
-
-1. There is a conflict into the definition of the requirements,  response from https://github.com/cko-recruitment/#processing-a-payment says possible status are `Authorized`, `Declined` but requirements https://github.com/cko-recruitment/#requirements and intial implementation states that there is an extra status. I will assume Rejected is an actual status and clarify it on the interview. Normal delivery flow I would have raised this question before implementing.
-
-### Assumptions
-
-1. Json format require "_" between words in JSON exposed variables, I assumed that was the format requirement, generally I would use camel case.
-2. Rejected status was required and it would return the request values.
-3. Authentication was not done, but it would be a critical requirement to have some kind of validation related to it
-4. Amount format follows the same pattern in both client and bank simulator as there is no specification about it
-<!-- Complete this section at the end of the exercise. Focus on what changed between the
-initial architecture and final implementation. -->
-
-
-
-### What changed during implementation?
-
-_To be completed._
-
-### Which decision had the greatest impact?
-
-_To be completed._
-
-### What would I do next in a production environment?
-
-1. Time reference needs to be centralized, in a distributed system time reference can change which can impact payments received from different countries, so time should be based on the location of the request and not internal application time.
-2. 
-_To be completed._

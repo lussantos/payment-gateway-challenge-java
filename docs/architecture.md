@@ -15,10 +15,9 @@ will be updated as the final solution takes shape.
 ## Phase 3 — Database and Events
 - Implement idempotency to prevent the same transaction from being processed twice.
 - Add a PostgreSQL connection.
-- Publish events so that payment data can be distributed to other applications.
 
 ## Phase 4 — Bank Resilience
-
+- Publish events so that payment data can be distributed to other applications.
 - Add a circuit breaker around the bank integration.
 - Track downstream failures and avoid excessive requests while the bank is recovering.
 
