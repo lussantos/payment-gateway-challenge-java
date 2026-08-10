@@ -30,6 +30,7 @@ services:
         target: /imposters
 
   payment_gateway:
+    profiles: ["gateway"]
     container_name: payment_gateway
     build:
       context: .
